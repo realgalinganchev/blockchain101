@@ -1,8 +1,8 @@
 import React from "react";
-import BlockClass from "./BlockClass"; // Import the BlockClass
+import { Block } from "./types/block";
 
 interface BlockViewProps {
-  block: BlockClass; // Use BlockClass as the type
+  block: Block;
 }
 
 const BlockView: React.FC<BlockViewProps> = ({ block }) => {
@@ -14,10 +14,11 @@ const BlockView: React.FC<BlockViewProps> = ({ block }) => {
       <p>Previous hash: {block.previousHash}</p>
       <p>Data: {block.data}</p>
       <h3>Transactions:</h3>
-      {block.transactions?.map((tx, index) => (
-        <p key={index}>
-          Tx {tx.id} from {tx.input.address} to {tx.output.address} for {tx.output.amount}
-        </p>
+      {block.transactions?.map((tx) => (
+        <div key={tx.id}>
+          <p>Transaction ID: {tx.id}</p>
+          {/* Add other transaction details as needed */}
+        </div>
       ))}
     </div>
   );

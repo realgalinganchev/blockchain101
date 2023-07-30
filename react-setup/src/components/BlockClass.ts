@@ -1,18 +1,20 @@
 import SHA256 from 'crypto-js/sha256';
+import { Transaction } from './types/block';
 
 class BlockClass {
-  id: number; // Add id property
-  nonce: number; // Add nonce property
-  hash: string; // Add hash property
-  transactions: any[]; // Add transactions property
-  data: string; // Add data property
-  previousHash: string; // Add previousHash property
+  static currentId = 0;
+  id: number;
+  nonce: number; 
+  hash: string; 
+  transactions: Transaction[]; 
+  data: string; 
+  previousHash: string;
 
   constructor(data: string, previousHash = '') {
-    this.id = 0; // Initialize id with a default value
-    this.nonce = 0; // Initialize nonce with a default value
-    this.hash = ''; // Initialize hash with a default value
-    this.transactions = []; // Initialize transactions as an empty array
+    this.id = BlockClass.currentId++; 
+    this.nonce = 0;
+    this.hash = ''; 
+    this.transactions = [];
     this.data = data;
     this.previousHash = previousHash;
   }

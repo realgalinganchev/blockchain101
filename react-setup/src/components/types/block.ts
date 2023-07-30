@@ -13,11 +13,11 @@ export interface Transaction {
 }
 
 export interface Block {
-  id?: number;
-  nonce?: number;
-  hash?: string;
-  transactions?: Transaction[];
-  data: any;
+  id: number;
+  nonce: number;
+  hash: string;
+  transactions: Transaction[];
+  data: string;
   previousHash: string;
-  toHash: any;
+  toHash: () => string;
 }

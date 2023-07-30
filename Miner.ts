@@ -1,27 +1,23 @@
 import { SHA256 } from "crypto-js";
-
+import { Block, Transaction } from "./react-setup/src/components/types/block";
+import BlockClass from "./react-setup/src/components/BlockClass";
 export const TARGET_DIFFICULTY: bigint = BigInt(
   "0x0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 );
 export const MAX_TRANSACTIONS: number = 10;
+import Blockchain from "./Blockchain";
 
-let mempool: any[] = [];  
-let blocks: any[] = []; 
+const blockchain = Blockchain.instance;
+let mempool: any[] = [];
 
-interface Block {
-  id: number;
-  transactions?: any[];  
-  nonce?: number;
-  hash?: string;
-}
 
-export function addTransaction(transaction: any) {
+export function addTransaction(transaction: Transaction) {
   mempool.push(transaction);
 }
 
-export function mine(): void {
-  let blocks: any[] = [];
-  const block: Block = { id: blocks.length };
+export function mine(): Block {
+  const previousHash = blockchain.getLatestBlock().hash;
+  const block: Block = new BlockClass('', previousHash);
   if (mempool.length > MAX_TRANSACTIONS) {
     block.transactions = mempool.splice(0, MAX_TRANSACTIONS);
   } else {
@@ -38,7 +34,11 @@ export function mine(): void {
   } while (BigInt(`0x${hashOfBlock}`) > TARGET_DIFFICULTY);
 
   block.hash = hashOfBlock;
-  blocks.push(block);
+  block.previousHash = blockchain.chain.length ? blockchain.chain[blockchain.chain.length - 1].hash : "";
+  block.toHash = () => block.hash;
+  blockchain.addBlock(block);
+
+  return block;
 }
 
-export { blocks, mempool };
+export { mempool };

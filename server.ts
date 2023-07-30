@@ -3,6 +3,7 @@ import { addTransaction, mine, blocks } from './Miner';
 import Blockchain from './Blockchain';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsdoc from 'swagger-jsdoc';
+import cors from 'cors';
 // import Block from './react-setup/src/components/Block';
 import path from 'path';
 const swaggerOptions = {
@@ -25,7 +26,7 @@ const swaggerOptions = {
 const app: Express = express();
 app.use(express.json());
 app.use(express.static('public'));
-
+app.use(cors());
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 

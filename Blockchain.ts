@@ -1,4 +1,4 @@
-import Block from './react-setup/src/components/Block';
+import Block from './react-setup/src/components/BlockClass';
 import SHA256 from "crypto-js/sha256";
 
 class Blockchain {

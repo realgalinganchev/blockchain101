@@ -1,7 +1,8 @@
 // BlocksView component
 import { useEffect, useState } from "react";
-import BlockView, { Transaction } from "./BlockView";
+import BlockView from "./BlockView";
 import React from "react";
+import { Transaction } from "./types/block";
 
 interface Block {
   id: number;
@@ -17,7 +18,7 @@ export default function BlocksView() {
   const [blocks, setBlocks] = useState<Block[]>([]);
 
   useEffect(() => {
-    fetch("/blocks")
+    fetch("http://localhost:3000/blocks")
       .then((res) => res.json())
       .then((blocks: Block[]) => setBlocks(blocks));
   }, []);

@@ -1,11 +1,16 @@
+// BlocksView component
 import { useEffect, useState } from "react";
 import BlockView, { Transaction } from "./BlockView";
+import React from "react";
 
 interface Block {
   id: number;
   nonce: number;
   hash: string;
   transactions: Transaction[];
+  data: string;
+  previousHash: string;
+  toHash: () => string;
 }
 
 export default function BlocksView() {
@@ -18,10 +23,10 @@ export default function BlocksView() {
   }, []);
 
   return (
-    <div>
+    <>
       {blocks.map((block) => (
         <BlockView key={block.id} block={block} />
       ))}
-    </div>
+    </>
   );
 }

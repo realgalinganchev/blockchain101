@@ -15,10 +15,13 @@ export interface Transaction {
 }
 
 interface Block {
-  id: number;
-  nonce: number;
-  hash: string;
-  transactions: Transaction[];
+  id?: number;
+  nonce?: number;
+  hash?: string;
+  transactions?: Transaction[];
+  data: any,
+  previousHash: string,
+  toHash: any,
 }
 
 interface BlockViewProps {
@@ -32,7 +35,7 @@ const BlockView: React.FC<BlockViewProps> = ({ block }) => {
       <p>Nonce: {block.nonce}</p>
       <p>Hash: {block.hash}</p>
       <h3>Transactions:</h3>
-      {block.transactions.map((tx, index) => (
+      {block.transactions?.map((tx, index) => (
         <p key={index}>
           Tx {tx.id} from {tx.input.address} to {tx.output.address} for {tx.output.amount}     
         </p>

@@ -1,5 +1,6 @@
 import React from "react";
 import { Transaction } from "./types/block";
+import "./styles/App.css";
 
 interface MempoolViewProps {
   mempool: Transaction[];
@@ -7,14 +8,17 @@ interface MempoolViewProps {
 
 const MempoolView: React.FC<MempoolViewProps> = ({ mempool }) => {
   return (
-    <div>
+    <div className="Mempool">
       <h2>Mempool</h2>
-      {mempool.map((transaction, index) => (
-        <div key={index}>
-          <p>Transaction ID: {transaction.id}</p>
-          <p>Transaction timestamp: {transaction.timestamp}</p>
-        </div>
-      ))}
+      <div className="TransactionList">
+        {mempool.map((transaction, index) => (
+          <div className="Transaction" key={index}>
+            <p>tx Nr.: {index + 1}</p>
+            <p>tx ID: {transaction.id}</p>
+            <p>timestamp: {transaction.timestamp}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

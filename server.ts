@@ -1,62 +1,31 @@
-import express, { Express, Request, Response } from "express";
-import { addTransaction, mine, mempool } from "./Miner";
-import Blockchain from "./Blockchain";
-import swaggerUi from "swagger-ui-express";
-import swaggerJsdoc from "swagger-jsdoc";
-import cors from "cors";
-import Block from './react-setup/src/components/BlockClass';
 import path from "path";
-import BlockClass from "./react-setup/src/components/BlockClass";
-require('dotenv').config();
+import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import express, { Express } from "express";
+import routes from "./routes";
+import { swaggerDocs } from "./constants/swagger";
 
-const swaggerOptions = {
-  swaggerDefinition: {
-    openapi: "3.0.0",
-    info: {
-      title: "Blockchain101 API",
-      version: "1.0.0",
-      description: "API documentation for Blockchain101",
-    },
-    servers: [
-      {
-        url: process.env.BACKEND_API_URL,
-      },
-    ],
-  },
-  apis: [path.join(__dirname, "swagger.js")],
-};
+require("dotenv").config();
 
 const app: Express = express();
+
 app.use(express.json());
 app.use(express.static("public"));
-app.use(cors());
-const swaggerDocs = swaggerJsdoc(swaggerOptions);
+app.use(
+  cors({
+    origin: "http://localhost:9000",
+    methods: ["GET", "POST"],
+    credentials: true,
+  })
+);
+
+app.use(express.static("client"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-const blockchain = Blockchain.instance;
-
-app.post('/transaction', (req: Request, res: Response) => {
-  addTransaction(req.body);
-  res.sendStatus(200);
-});
-
-app.get("/blockchain", (_req: Request, res: Response) => {
-  res.json(blockchain.chain);
-});
-
-app.get("/mempool", (req, res) => {
-  res.json(mempool);
-});
-
-app.get('/mine', (_req: Request, res: Response) => {
-  const newBlock = mine();
-  res.json(newBlock);
-});
-
+app.use("/", routes);
 
 app.listen(9001, () => console.log("Listening on port 9001"));
 
-app.use(express.static("client"));
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../client", "index.html"));
 });

@@ -1,4 +1,4 @@
-import Block from "./react-setup/src/components/BlockClass";
+import Block from "./Block";
 import SHA256 from "crypto-js/sha256";
 
 class Blockchain {
@@ -8,7 +8,7 @@ class Blockchain {
   constructor(initialChain: Block[] = [new Block("Genesis block", "")]) {
     this.chain = initialChain;
   }
-  
+
   addBlock(newBlock: Block) {
     newBlock.previousHash = this.chain[this.chain.length - 1].toHash();
     this.chain.push(newBlock);

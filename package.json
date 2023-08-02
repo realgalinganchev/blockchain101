@@ -5,8 +5,10 @@
   "main": "server.ts",
   "scripts": {
     "start": "nodemon -x \"ts-node server.ts\"",
+    "client": "cd react-setup && npm start",
     "build": "tsc",
-    "test": "echo \"No test specified\" && exit 0"
+    "test": "echo \"No test specified\" && exit 0",
+    "dev": "concurrently --kill-others \"npm run start\" \"npm run client\""
   },
   "dependencies": {
     "chai": "^4.3.7",
@@ -27,6 +29,7 @@
     "@types/node": "^16.18.39",
     "@types/swagger-jsdoc": "^6.0.1",
     "@types/swagger-ui-express": "^4.1.3",
+    "concurrently": "^8.2.0",
     "css-loader": "^6.8.1",
     "nodemon": "^3.0.1",
     "style-loader": "^3.3.3",

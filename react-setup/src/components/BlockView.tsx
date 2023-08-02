@@ -1,9 +1,9 @@
 import React from "react";
-import { Block } from "./types/block";
+import { BlockType } from "./types/block";
 import "./styles/App.css";
 
 interface BlockViewProps {
-  block: Block;
+  block: BlockType;
 }
 
 const BlockView: React.FC<BlockViewProps> = ({ block }) => {

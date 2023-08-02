@@ -1,4 +1,4 @@
-export interface Transaction {
+export interface TransactionType {
   id: string;
   timestamp: number;
   input: {
@@ -12,11 +12,11 @@ export interface Transaction {
   };
 }
 
-export interface Block {
+export interface BlockType {
   id: number;
   nonce: number;
   hash: string;
-  transactions: Transaction[];
+  transactions: TransactionType[];
   data: string;
   previousHash: string;
   toHash: () => string;

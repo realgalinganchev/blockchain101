@@ -1,21 +1,21 @@
 import React, { useEffect, useState } from "react";
-import BlockView from "./BlockView";
-import { Transaction, Block } from "./types/block";
-import MempoolView from "./MempoolView";
 import "./styles/App.css";
-const backendApiUrl = process.env.BACKEND_API_URL;
+import BlockView from "./BlockView";
+import MempoolView from "./MempoolView";
+import { BlockType, TransactionType } from "./types/block";
 
+const backendApiUrl = process.env.BACKEND_API_URL;
 const buttonClickSound = new Audio("/addSound.mp3");
 const mineButtonSound = new Audio("/mineSound.mp3");
 
 const App = () => {
-  const [blocks, setBlocks] = useState<Block[]>([]);
-  const [mempool, setMempool] = useState<Transaction[]>([]);
+  const [blocks, setBlocks] = useState<BlockType[]>([]);
+  const [mempool, setMempool] = useState<TransactionType[]>([]);
 
   const fetchBlockchain = () => {
     fetch(`${backendApiUrl}/blockchain`)
       .then((res) => res.json())
-      .then((blocks: Block[]) => setBlocks(blocks));
+      .then((blocks: BlockType[]) => setBlocks(blocks));
   };
 
   const fetchMempool = () => {

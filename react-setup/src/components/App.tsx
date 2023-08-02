@@ -3,6 +3,7 @@ import BlockView from "./BlockView";
 import { Transaction, Block } from "./types/block";
 import MempoolView from "./MempoolView";
 import "./styles/App.css";
+const backendApiUrl = process.env.BACKEND_API_URL;
 
 const buttonClickSound = new Audio("/addSound.mp3");
 const mineButtonSound = new Audio("/mineSound.mp3");
@@ -12,13 +13,13 @@ const App = () => {
   const [mempool, setMempool] = useState<Transaction[]>([]);
 
   const fetchBlockchain = () => {
-    fetch("http://localhost:3000/blockchain")
+    fetch(`${backendApiUrl}/blockchain`)
       .then((res) => res.json())
       .then((blocks: Block[]) => setBlocks(blocks));
   };
 
   const fetchMempool = () => {
-    fetch("http://localhost:3000/mempool")
+    fetch(`${backendApiUrl}/mempool`)
       .then((res) => res.json())
       .then((mempoolData) => setMempool(mempoolData));
   };
@@ -50,7 +51,7 @@ const App = () => {
       },
     };
 
-    fetch("http://localhost:3000/transaction", {
+    fetch(`${backendApiUrl}/transaction`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -66,7 +67,7 @@ const App = () => {
 
   const mineBlock = () => {
     mineButtonSound.play();
-    fetch("http://localhost:3000/mine", {
+    fetch(`${backendApiUrl}/mine`, {
       method: "GET",
     })
       .then(fetchBlockchain)

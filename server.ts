@@ -7,6 +7,7 @@ import cors from "cors";
 import Block from './react-setup/src/components/BlockClass';
 import path from "path";
 import BlockClass from "./react-setup/src/components/BlockClass";
+require('dotenv').config();
 
 const swaggerOptions = {
   swaggerDefinition: {
@@ -18,7 +19,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: "http://localhost:3000",
+        url: process.env.BACKEND_API_URL,
       },
     ],
   },
@@ -53,7 +54,7 @@ app.get('/mine', (_req: Request, res: Response) => {
 });
 
 
-app.listen(3000, () => console.log("Listening on port 3000"));
+app.listen(9001, () => console.log("Listening on port 9001"));
 
 app.use(express.static("client"));
 app.get("/", (req, res) => {

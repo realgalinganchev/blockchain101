@@ -20,4 +20,5 @@ export interface BlockType {
   data: string;
   previousHash: string;
   toHash: () => string;
+  toObject: () => any;
 }

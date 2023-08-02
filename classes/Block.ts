@@ -22,6 +22,17 @@ class Block {
   toHash(): string {
     return SHA256(this.data + this.previousHash).toString();
   }
+
+  toObject(): object {
+    return {
+      id: this.id,
+      nonce: this.nonce,
+      hash: this.hash,
+      transactions: this.transactions,
+      data: this.data,
+      previousHash: this.previousHash,
+    };
+  }
 }
 
 export default Block;

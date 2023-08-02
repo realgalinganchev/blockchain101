@@ -5,7 +5,11 @@ import { MAX_TRANSACTIONS, TARGET_DIFFICULTY } from "../constants/tx";
 import { sha256 } from "ethereum-cryptography/sha256";
 import { toHex, utf8ToBytes } from "ethereum-cryptography/utils";
 import { keccak256 } from "ethereum-cryptography/keccak";
-import { BlockType, TransactionType } from "../react-setup/src/components/types/block";
+import {
+  BlockType,
+  TransactionType,
+} from "../react-setup/src/components/types/block";
+import { db } from "./firebase/index";
 
 // the possible colors that the hash could represent
 const COLORS: string[] = ["red", "green", "blue", "yellow", "pink", "orange"];
@@ -17,7 +21,7 @@ export function addTransaction(transaction: TransactionType) {
   mempool.push(transaction);
 }
 
-export function mine(): BlockType {
+export async function mine(): Promise<BlockType> {
   const previousHash = blockchain.getLatestBlock().hash;
   const block: BlockType = new BlockClass("", previousHash);
   if (mempool.length > MAX_TRANSACTIONS) {
@@ -42,6 +46,16 @@ export function mine(): BlockType {
   block.toHash = () => block.hash;
   blockchain.addBlock(block);
 
+  //write to firebase
+
+  try {
+    let blockData = block.toObject();
+    let docRef = db.collection("blockchain").doc(block.hash);
+    await docRef.set(blockData);
+  } catch (error) {
+    console.error("Error writing to Firestore: ", error);
+  }
+  
   return block;
 }
 

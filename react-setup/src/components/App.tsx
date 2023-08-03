@@ -7,7 +7,7 @@ import { BlockType, TransactionType } from "./types/block";
 const backendApiUrl = process.env.BACKEND_API_URL;
 const buttonClickSound = new Audio("/addSound.mp3");
 const mineButtonSound = new Audio("/mineSound.mp3");
-//import { deleteAllBlocks } from "../../../services/blockchain";
+
 
 const App = () => {
   const [blocks, setBlocks] = useState<BlockType[]>([]);

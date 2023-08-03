@@ -4,6 +4,7 @@ import swaggerUi from "swagger-ui-express";
 import express, { Express } from "express";
 import routes from "./routes";
 import { swaggerDocs } from "./constants/swagger";
+import { initializeBlockchain, initializeMempool } from "./services/blockchain";
 
 require("dotenv").config();
 
@@ -24,7 +25,11 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 app.use("/", routes);
 
-app.listen(9001, () => console.log("Listening on port 9001"));
+initializeBlockchain().then(() => {
+  initializeMempool().then(() => {
+    app.listen(9001, () => console.log("Listening on port 9001"));
+  });
+});
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../client", "index.html"));

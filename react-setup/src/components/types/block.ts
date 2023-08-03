@@ -18,6 +18,7 @@ export interface BlockType {
   hash: string;
   transactions: TransactionType[];
   data: string;
+  timestamp:number;
   previousHash: string;
   toHash: () => string;
   toObject: () => any;

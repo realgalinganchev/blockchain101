@@ -1,9 +1,9 @@
 import React from "react";
-import { Transaction } from "./types/block";
+import { TransactionType } from "./types/block";
 import "./styles/App.css";
 
 interface MempoolViewProps {
-  mempool: Transaction[];
+  mempool: TransactionType[];
 }
 
 const MempoolView: React.FC<MempoolViewProps> = ({ mempool }) => {

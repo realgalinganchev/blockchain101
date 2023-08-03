@@ -7,6 +7,7 @@ import { BlockType, TransactionType } from "./types/block";
 const backendApiUrl = process.env.BACKEND_API_URL;
 const buttonClickSound = new Audio("/addSound.mp3");
 const mineButtonSound = new Audio("/mineSound.mp3");
+//import { deleteAllBlocks } from "../../../services/blockchain";
 
 const App = () => {
   const [blocks, setBlocks] = useState<BlockType[]>([]);
@@ -70,8 +71,10 @@ const App = () => {
     fetch(`${backendApiUrl}/mine`, {
       method: "GET",
     })
-      .then(fetchBlockchain)
-      .then(fetchMempool)
+      .then(() => {
+        fetchBlockchain();
+        fetchMempool();
+      })
       .catch((error) => console.error("Error mining block:", error));
   };
 
@@ -84,10 +87,16 @@ const App = () => {
       </button>
       <div className="Blockchain">
         <h1>Blockchain</h1>
-        <div>
-          {blocks.map((block) => (
-            <BlockView key={block.id} block={block} />
-          ))}
+        <div className="BlocksContainer">
+          {blocks
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .map((block: BlockType) => (
+              <BlockView
+                key={block.id}
+                block={block}
+                isCompactView={blocks.length > 9}
+              />
+            ))}
         </div>
       </div>
     </div>

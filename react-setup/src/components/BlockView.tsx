@@ -1,12 +1,13 @@
 import React from "react";
-import { BlockType } from "./types/block";
+import { BlockType, TransactionType } from "./types/block";
 import "./styles/App.css";
 
 interface BlockViewProps {
   block: BlockType;
+  isCompactView: boolean;
 }
 
-const BlockView: React.FC<BlockViewProps> = ({ block }) => {
+const BlockView: React.FC<BlockViewProps> = ({ block, isCompactView }) => {
   return (
     <div className="Block">
       <h3>Block ID: {block.id}</h3>
@@ -14,14 +15,28 @@ const BlockView: React.FC<BlockViewProps> = ({ block }) => {
       <p>Hash: ...{block.hash.slice(-4)}</p>
       <p>Data: {block.data}</p>
       <p>Previous Hash: ...{block.previousHash.slice(-4)}</p>
-      {block.transactions.map((transaction, index) => (
-        <div className="Transaction" key={index}>
-          <span>
-            Tx({index + 1}) ID: ...{transaction.id.slice(-4)}
-          </span>
-          <span>Tx timestamp: {transaction.timestamp}</span>
-        </div>
-      ))}
+      <div>
+        {block.transactions
+          .filter((_, i: number) => {
+            if (isCompactView && block.transactions.length > 2) {
+              return i === 0 || i === block.transactions.length - 1;
+            }
+            return true;
+          })
+          .map((tx: TransactionType, i: number, filteredTx) => (
+            <React.Fragment key={i}>
+              <div className="Transaction">
+                <span>
+                  Tx({block.transactions.indexOf(tx) + 1}) ID: ...
+                  {tx.id.slice(-4)}
+                </span>
+              </div>
+              {isCompactView && i === 0 && block.transactions.length > 2 && (
+                <div>...</div>
+              )}
+            </React.Fragment>
+          ))}
+      </div>
     </div>
   );
 };

@@ -9,6 +9,7 @@ class Block {
   transactions: TransactionType[];
   data: string;
   previousHash: string;
+  timestamp:  number;
 
   constructor(data: string, previousHash = "") {
     this.id = Block.currentId++;
@@ -17,6 +18,7 @@ class Block {
     this.transactions = [];
     this.data = data;
     this.previousHash = previousHash;
+    this.timestamp = Date.now()
   }
 
   toHash(): string {
@@ -31,6 +33,7 @@ class Block {
       transactions: this.transactions,
       data: this.data,
       previousHash: this.previousHash,
+      timestamp: this.timestamp
     };
   }
 }

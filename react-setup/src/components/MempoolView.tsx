@@ -1,10 +1,10 @@
 import React from "react";
-import { TransactionType } from "./types/block";
+import { EthereumTransaction } from "./types/block";
 import "./styles/App.css";
 import { getAddress } from "../utils/crypto";
 
 interface MempoolViewProps {
-  mempool: TransactionType[];
+  mempool: EthereumTransaction[];
 }
 
 const MempoolView: React.FC<MempoolViewProps> = ({ mempool }) => {
@@ -16,9 +16,8 @@ const MempoolView: React.FC<MempoolViewProps> = ({ mempool }) => {
         {mempool.map((transaction, index) => (
           <div className="Transaction" key={index}>
             <p>tx Nr.: {index + 1}</p>
-            <p>tx ID: {transaction.id}</p>
-            <p>from: {getAddress(transaction.input.publicKey)}</p>
-            <p>to: {getAddress(transaction.output.publicKey)}</p>
+            <p>from: {transaction.from}</p>
+            <p>to: {transaction.to?.toString()}</p>
           </div>
         ))}
       </div>

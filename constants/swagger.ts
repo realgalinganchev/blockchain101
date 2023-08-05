@@ -3,8 +3,7 @@ import swaggerJsdoc from "swagger-jsdoc";
 
  const swaggerOptions = {
   swaggerDefinition: {
-    openapi: "3.0.0",
-    info: {
+      info: {
       title: "Blockchain101 API",
       version: "1.0.0",
       description: "API documentation for Blockchain101",

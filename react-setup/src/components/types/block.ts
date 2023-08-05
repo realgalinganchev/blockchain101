@@ -1,22 +1,15 @@
-export interface TransactionType {
+import { ethers } from "ethers";
+
+export interface EthereumTransaction extends  ethers.providers.TransactionRequest  {
+  from: string;
   id: string;
-  timestamp: number;
-  input: {
-    publicKey: Uint8Array;
-    amount: number;
-    signature: string;
-  };
-  output: {
-    publicKey: Uint8Array;
-    amount: number;
-  };
 }
 
 export interface BlockType {
   id: number;
   nonce: number;
   hash: string;
-  transactions: TransactionType[];
+  transactions: EthereumTransaction[];
   data: string;
   timestamp:number;
   previousHash: string;

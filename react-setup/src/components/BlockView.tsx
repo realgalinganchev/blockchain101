@@ -1,5 +1,5 @@
 import React from "react";
-import { BlockType, TransactionType } from "./types/block";
+import { BlockType, EthereumTransaction } from "./types/block";
 import "./styles/App.css";
 
 interface BlockViewProps {
@@ -23,12 +23,11 @@ const BlockView: React.FC<BlockViewProps> = ({ block, isCompactView }) => {
             }
             return true;
           })
-          .map((tx: TransactionType, i: number, filteredTx) => (
+          .map((tx: EthereumTransaction, i: number, filteredTx) => (
             <React.Fragment key={i}>
               <div className="Transaction">
                 <span>
-                  Tx({block.transactions.indexOf(tx) + 1}) ID: ...
-                  {tx.id.slice(-4)}
+                  Tx({block.transactions.indexOf(tx) + 1})
                 </span>
               </div>
               {isCompactView && i === 0 && block.transactions.length > 2 && (

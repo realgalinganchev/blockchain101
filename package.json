@@ -11,6 +11,7 @@
     "dev": "concurrently --kill-others \"npm run start\" \"npm run client\""
   },
   "dependencies": {
+    "@ethereumjs/tx": "^4.2.0",
     "chai": "^4.3.7",
     "cors": "^2.8.5",
     "crypto-js": "^4.1.1",

@@ -1,12 +1,12 @@
 import SHA256 from "crypto-js/sha256";
-import { TransactionType } from "../react-setup/src/components/types/block";
+import { EthereumTransaction } from "../react-setup/src/components/types/block";
 
 class Block {
   static currentId = 0;
   id: number;
   nonce: number;
   hash: string;
-  transactions: TransactionType[];
+  transactions: EthereumTransaction[];
   data: string;
   previousHash: string;
   timestamp:  number;

@@ -5,18 +5,18 @@ import { MAX_TRANSACTIONS, TARGET_DIFFICULTY } from "../constants/tx";
 
 import {
   BlockType,
-  TransactionType,
+  EthereumTransaction,
 } from "../react-setup/src/components/types/block";
 import { db } from "./firebase/index";
 
 
 const blockchain = Blockchain.instance;
-let mempool: TransactionType[] = [];
+let mempool: EthereumTransaction[] = [];
 
 export async function initializeMempool() {
   const transactionsSnapshot = await db.collection("mempool").get();
   const fetchedTransactions = transactionsSnapshot.docs.map(
-    (doc: any) => doc.data() as TransactionType
+    (doc: any) => doc.data() as EthereumTransaction
   );
   mempool = [...fetchedTransactions];
 }
@@ -41,7 +41,7 @@ export async function initializeBlockchain() {
   }
 }
 
-export async function addTransaction(transaction: TransactionType) {
+export async function addTransaction(transaction: EthereumTransaction) {
   mempool.push(transaction);
 
   try {
@@ -56,7 +56,7 @@ export async function mine(): Promise<BlockType> {
   const previousHash = blockchain.getLatestBlock().hash;
   const block: BlockType = new BlockClass("", previousHash);
 
-  let selectedTransactions: TransactionType[] = [];
+  let selectedTransactions: EthereumTransaction[] = [];
 
   if (mempool.length > MAX_TRANSACTIONS) {
     selectedTransactions = mempool.splice(0, MAX_TRANSACTIONS);

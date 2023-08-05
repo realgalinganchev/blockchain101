@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import "./styles/App.css";
 import BlockView from "./BlockView";
 import MempoolView from "./MempoolView";
-import { BlockType, TransactionType } from "./types/block";
-import { createMsgHash, getAddress } from "../utils/crypto";
-import { ec as EC } from "elliptic"; 
+import { BlockType, EthereumTransaction } from "./types/block";
+import { ec as EC } from "elliptic";
+import { ethers, Wallet, utils } from "ethers";
 
 const ec = new EC("secp256k1");
 const backendApiUrl = process.env.BACKEND_API_URL;
@@ -13,7 +13,7 @@ const mineButtonSound = new Audio("/mineSound.mp3");
 
 const App = () => {
   const [blocks, setBlocks] = useState<BlockType[]>([]);
-  const [mempool, setMempool] = useState<TransactionType[]>([]);
+  const [mempool, setMempool] = useState<EthereumTransaction[]>([]);
 
   const fetchBlockchain = () => {
     fetch(`${backendApiUrl}/blockchain`)
@@ -30,54 +30,40 @@ const App = () => {
   useEffect(fetchBlockchain, []);
   useEffect(fetchMempool, []);
 
-  const addTransaction = () => {
+  const getNonceForAddress = async (address: string): Promise<number> => {
+    // TO DO: add logic to fetch the nonce for the given address from the Ethereum network or your backend
+    return Math.floor(Math.random() * 1000);
+  };
+
+  const addTransaction = async () => {
     buttonClickSound.play();
-    const id = Math.random().toString(36).substring(2);
-    const timestamp = Date.now();
-    let inputKey = ec.genKeyPair();
-    let inputPublicKey = inputKey.getPublic().encode("hex", false);
 
-    let outputKey;
-    let outputPublicKey;
+    let wallet = Wallet.createRandom();
+    let inputPrivateKey = wallet.privateKey;
+    let inputPublicKey = wallet.publicKey;
+
+    let outputWallet;
     do {
-      outputKey = ec.genKeyPair();
-      outputPublicKey = outputKey.getPublic().encode("hex", false);
-    } while (inputPublicKey === outputPublicKey); 
+      outputWallet = Wallet.createRandom();
+    } while (inputPublicKey === outputWallet.publicKey);
 
-    const inputAmount = Math.random();
-    const outputAmount = Math.random();
+    const value = ethers.utils.parseEther((Math.random() * 10).toString());
 
-    let inputAddress = getAddress(new TextEncoder().encode(inputPublicKey));
-    let outputAddress = getAddress(new TextEncoder().encode(outputPublicKey));
-
-    const transaction = {
-      id,
-      timestamp,
-      input: {
-        publicKey: new TextEncoder().encode(inputPublicKey),
-        amount: inputAmount,
-        signature: "",
-      },
-      output: {
-        publicKey: new TextEncoder().encode(outputPublicKey),
-        amount: outputAmount,
-      },
+    const txData = {
+      nonce: await getNonceForAddress(wallet.address),
+      gasPrice: utils.parseUnits("20", "gwei"),
+      gasLimit: 21000,
+      to: outputWallet.address,
+      value: ethers.utils.parseEther((Math.random() * 10).toString()),
+      data: utils.hexlify([]), // no data is equivalent to empty array
     };
 
-    const msgHash = createMsgHash(transaction);
-    const inputSignature = inputKey.sign(msgHash).toDER("hex");
-    transaction.input.signature = inputSignature;
+    const transaction = await wallet.signTransaction(txData);
 
-    const transactionToSend = {
-      ...transaction,
-      input: {
-        ...transaction.input,
-        address: inputAddress,
-      },
-      output: {
-        ...transaction.output,
-        address: outputAddress,
-      },
+    const transactionToSend: EthereumTransaction = {
+      from: wallet.address,
+      ...txData,
+      id: utils.keccak256(transaction), // use keccak256 to generate transaction id
     };
 
     fetch(`${backendApiUrl}/transaction`, {
@@ -89,7 +75,7 @@ const App = () => {
     })
       .then(() => setMempool([...mempool, transactionToSend]))
       .catch((error) => {
-        setMempool(mempool.filter((tx) => tx.id !== transactionToSend.id));
+        setMempool(mempool.filter((tx) => tx.to !== transactionToSend.to));
         console.error("Error adding transaction:", error);
       });
   };

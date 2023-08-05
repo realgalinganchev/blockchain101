@@ -1,9 +1,7 @@
 import path from "path";
 import cors from "cors";
-import swaggerUi from "swagger-ui-express";
 import express, { Express } from "express";
 import routes from "./routes";
-import { swaggerDocs } from "./constants/swagger";
 import { initializeBlockchain, initializeMempool } from "./services/blockchain";
 
 require("dotenv").config();
@@ -21,8 +19,6 @@ app.use(
 );
 
 app.use(express.static("client"));
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-
 app.use("/", routes);
 
 initializeBlockchain().then(() => {

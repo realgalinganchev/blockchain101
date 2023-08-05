@@ -2,12 +2,12 @@ export interface TransactionType {
   id: string;
   timestamp: number;
   input: {
-    address: string;
+    publicKey: Uint8Array;
     amount: number;
     signature: string;
   };
   output: {
-    address: string;
+    publicKey: Uint8Array;
     amount: number;
   };
 }

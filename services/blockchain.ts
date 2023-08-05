@@ -2,32 +2,28 @@ import { SHA256 } from "crypto-js";
 import BlockClass from "../classes/Block";
 import Blockchain from "../classes/Blockchain";
 import { MAX_TRANSACTIONS, TARGET_DIFFICULTY } from "../constants/tx";
-import { sha256 } from "ethereum-cryptography/sha256";
-import { toHex, utf8ToBytes } from "ethereum-cryptography/utils";
-import { keccak256 } from "ethereum-cryptography/keccak";
+
 import {
   BlockType,
   TransactionType,
 } from "../react-setup/src/components/types/block";
 import { db } from "./firebase/index";
 
-// the possible colors that the hash could represent
-const COLORS: string[] = ["red", "green", "blue", "yellow", "pink", "orange"];
 
 const blockchain = Blockchain.instance;
-let mempool: any[] = [];
+let mempool: TransactionType[] = [];
 
 export async function initializeMempool() {
   const transactionsSnapshot = await db.collection("mempool").get();
-  const fetchedTransactions = transactionsSnapshot.docs.map((doc) =>
-    doc.data()
+  const fetchedTransactions = transactionsSnapshot.docs.map(
+    (doc: any) => doc.data() as TransactionType
   );
   mempool = [...fetchedTransactions];
 }
 
 export async function getMempoolTransactions() {
   const snapshot = await db.collection("mempool").get();
-  return snapshot.docs.map((doc) => doc.data());
+  return snapshot.docs.map((doc: any) => doc.data());
 }
 
 export async function initializeBlockchain() {
@@ -103,7 +99,7 @@ export async function mine(): Promise<BlockType> {
     db.collection("mempool")
       .doc(transaction.id)
       .delete()
-      .catch((error) => {
+      .catch((error: any) => {
         console.error("Error removing transaction from Firestore: ", error);
       });
   });
@@ -113,33 +109,15 @@ export async function mine(): Promise<BlockType> {
 
 export async function getBlocks() {
   const snapshot = await db.collection("blockchain").get();
-  return snapshot.docs.map((doc) => doc.data());
-}
-
-export function findColor(hash: string): string | undefined {
-  const rainbowTable = COLORS.map((c) => sha256(utf8ToBytes(c)));
-  const hashBytes = utf8ToBytes(hash);
-
-  for (let i = 0; i < rainbowTable.length; i++) {
-    if (toHex(rainbowTable[i]) === toHex(hashBytes)) {
-      return COLORS[i];
-    }
-  }
+  return snapshot.docs.map((doc: any) => doc.data());
 }
 
 export async function deleteAllBlocks() {
   const blocksSnapshot = await db.collection("blockchain").get();
 
-  blocksSnapshot.docs.forEach((doc) => {
+  blocksSnapshot.docs.forEach((doc: any) => {
     doc.ref.delete();
   });
-}
-
-export function getAddress(publicKey: Uint8Array): Uint8Array {
-  const firstByteOff = publicKey.slice(1);
-  const hashMsg = keccak256(firstByteOff);
-  const last20ofHash = hashMsg.slice(-20);
-  return last20ofHash;
 }
 
 export { mempool };

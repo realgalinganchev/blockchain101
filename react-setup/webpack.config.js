@@ -10,6 +10,13 @@ module.exports = {
   },
   resolve: {
     extensions: [".tsx", ".ts", ".js"],
+    fallback: {
+      fs : false,
+      util: require.resolve("util/"),
+      request: false,
+      stream: require.resolve("stream-browserify"),
+      events: require.resolve("events/")
+    },
   },
   module: {
     rules: [
@@ -19,7 +26,7 @@ module.exports = {
         use: {
           loader: "babel-loader",
           options: {
-            presets: ["@babel/preset-env", "@babel/preset-react"],
+            presets: ["@babel/preset-env", "@babel/preset-react", "@babel/preset-typescript"], 
           },
         },
       },

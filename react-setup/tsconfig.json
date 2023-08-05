@@ -4,7 +4,8 @@
     "module": "ESNext",
     "jsx": "react",
     "strict": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "lib": ["DOM", "ES6", "DOM.Iterable", "ScriptHost"]
   },
   "include": ["src", "custom.d.ts", "../classes/Block.ts"]
 }

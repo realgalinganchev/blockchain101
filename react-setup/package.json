@@ -11,14 +11,20 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "crypto-js": "^4.1.1",
+    "elliptic": "^6.5.4",
+    "events": "^3.3.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5"
   },
   "devDependencies": {
     "@babel/core": "^7.22.9",
     "@babel/preset-env": "^7.22.9",
     "@babel/preset-react": "^7.22.5",
     "@babel/preset-typescript": "^7.22.5",
+    "@types/elliptic": "^6.4.14",
     "@types/react": "^18.2.17",
     "@types/react-dom": "^18.2.7",
     "babel-loader": "^9.1.3",

@@ -2,13 +2,13 @@ import { SHA256 } from "crypto-js";
 import BlockClass from "../classes/Block";
 import Blockchain from "../classes/Blockchain";
 import { MAX_TRANSACTIONS, TARGET_DIFFICULTY } from "../constants/tx";
+import { ethers, Wallet, utils } from "ethers";
 
 import {
   BlockType,
   EthereumTransaction,
 } from "../react-setup/src/components/types/block";
 import { db } from "./firebase/index";
-
 
 const blockchain = Blockchain.instance;
 let mempool: EthereumTransaction[] = [];
@@ -64,6 +64,35 @@ export async function mine(): Promise<BlockType> {
     selectedTransactions = [...mempool];
     mempool.length = 0;
   }
+
+  const toHexString = (value: ethers.BigNumberish | undefined): string => {
+    if (value === undefined) {
+      throw new Error("Value is undefined");
+    }
+
+    return typeof value === "string"
+      ? value
+      : ethers.BigNumber.from(value).toHexString();
+  };
+
+  selectedTransactions = selectedTransactions.map((transaction) => {
+    const transactionFields = [
+      toHexString(transaction.nonce),
+      toHexString(transaction.gasPrice),
+      toHexString(transaction.gasLimit),
+      transaction.to,
+      toHexString(transaction.value),
+      transaction.data,
+    ];
+
+    const rlpEncoded = ethers.utils.RLP.encode(transactionFields);
+    const rawTransactionHash = ethers.utils.keccak256(rlpEncoded);
+
+    return {
+      ...transaction,
+      hash: rawTransactionHash,
+    };
+  });
 
   block.transactions = selectedTransactions;
 

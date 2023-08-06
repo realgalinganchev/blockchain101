@@ -47,15 +47,13 @@ const App = () => {
       outputWallet = Wallet.createRandom();
     } while (inputPublicKey === outputWallet.publicKey);
 
-    const value = ethers.utils.parseEther((Math.random() * 10).toString());
-
     const txData = {
       nonce: await getNonceForAddress(wallet.address),
       gasPrice: utils.parseUnits("20", "gwei"),
       gasLimit: 21000,
       to: outputWallet.address,
       value: ethers.utils.parseEther((Math.random() * 10).toString()),
-      data: utils.hexlify([]), // no data is equivalent to empty array
+      data: utils.hexlify([]), 
     };
 
     const transaction = await wallet.signTransaction(txData);
@@ -63,7 +61,7 @@ const App = () => {
     const transactionToSend: EthereumTransaction = {
       from: wallet.address,
       ...txData,
-      id: utils.keccak256(transaction), // use keccak256 to generate transaction id
+      id: utils.keccak256(transaction),
     };
 
     fetch(`${backendApiUrl}/transaction`, {

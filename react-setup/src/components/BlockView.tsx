@@ -23,11 +23,12 @@ const BlockView: React.FC<BlockViewProps> = ({ block, isCompactView }) => {
             }
             return true;
           })
-          .map((tx: EthereumTransaction, i: number, filteredTx) => (
+          .map((tx: EthereumTransaction, i: number) => (
             <React.Fragment key={i}>
               <div className="Transaction">
                 <span>
                   Tx({block.transactions.indexOf(tx) + 1})
+                  Tx hash: 0x..{tx.hash?.slice(-3)}
                 </span>
               </div>
               {isCompactView && i === 0 && block.transactions.length > 2 && (

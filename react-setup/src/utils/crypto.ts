@@ -14,6 +14,6 @@ export function getAddress(publicKey: Uint8Array): string {
 }
 
 export function formatHash(hash: string): string {
-  const formattedHash: string = `${hash.slice(0, 2)}...${hash.slice(-3)}`;
+  const formattedHash: string = `${hash.slice(0, 2)}..${hash.slice(-3)}`;
   return formattedHash;
 }

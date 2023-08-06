@@ -18,11 +18,11 @@ const BlockView: React.FC<BlockViewProps> = ({
   return (
     <div className="Block">
       {/* Nr for visual purposes only */}
-      <h3>Block Nr: {index + 1}</h3>
+      <h5 className="gameFont">Block Nr: {index + 1}</h5>
       <p>Nonce: {block.nonce}</p>
-      <p>Hash: ...{formatHash(block.hash)}</p>
+      <p>Hash: {formatHash(block.hash)}</p>
       <p>Data: {block.data}</p>
-      <p>{index !== 0 && `Parent Hash: ${formatHash(block.previousHash)}`}</p>
+      <p>{index !== 0 && ` Parent Hash: ${formatHash(block.previousHash)}`}</p>
       <div>
         {transactions &&
           transactions
@@ -36,7 +36,10 @@ const BlockView: React.FC<BlockViewProps> = ({
               <React.Fragment key={i}>
                 <div className="Transaction">
                   <span>
-                    Tx({block.transactions.indexOf(tx) + 1}) Tx hash:
+                    (
+                    {block.transactionsDetailed &&
+                      block.transactionsDetailed.indexOf(tx) + 1}
+                    )Tx hash:
                     {tx.hash && formatHash(tx.hash)}
                   </span>
                 </div>

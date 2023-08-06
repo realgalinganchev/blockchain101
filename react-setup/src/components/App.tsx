@@ -141,7 +141,7 @@ const App = () => {
         Mine Block
       </button>
       <div className="Blockchain">
-        <h1>Blockchain</h1>
+        <h1 className="gameFont">Blockchain</h1>
         <div className="BlocksContainer">
           {blocks
             .sort((a, b) => a.timestamp - b.timestamp)

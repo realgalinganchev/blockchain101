@@ -1,41 +1,50 @@
 import React from "react";
 import { BlockType, EthereumTransaction } from "./types/block";
 import "./styles/App.css";
+import { formatHash } from "../utils/crypto";
 
 interface BlockViewProps {
   block: BlockType;
   isCompactView: boolean;
+  index: number;
 }
 
-const BlockView: React.FC<BlockViewProps> = ({ block, isCompactView }) => {
+const BlockView: React.FC<BlockViewProps> = ({
+  block,
+  isCompactView,
+  index,
+}) => {
+  const transactions = block.transactionsDetailed;
   return (
     <div className="Block">
-      <h3>Block ID: {block.id}</h3>
+      {/* Nr for visual purposes only */}
+      <h3>Block Nr: {index + 1}</h3>
       <p>Nonce: {block.nonce}</p>
-      <p>Hash: ...{block.hash.slice(-4)}</p>
+      <p>Hash: ...{formatHash(block.hash)}</p>
       <p>Data: {block.data}</p>
-      <p>Previous Hash: ...{block.previousHash.slice(-4)}</p>
+      <p>{index !== 0 && `Parent Hash: ${formatHash(block.previousHash)}`}</p>
       <div>
-        {block.transactions
-          .filter((_, i: number) => {
-            if (isCompactView && block.transactions.length > 2) {
-              return i === 0 || i === block.transactions.length - 1;
-            }
-            return true;
-          })
-          .map((tx: EthereumTransaction, i: number) => (
-            <React.Fragment key={i}>
-              <div className="Transaction">
-                <span>
-                  Tx({block.transactions.indexOf(tx) + 1})
-                  Tx hash: 0x..{tx.hash?.slice(-3)}
-                </span>
-              </div>
-              {isCompactView && i === 0 && block.transactions.length > 2 && (
-                <div>...</div>
-              )}
-            </React.Fragment>
-          ))}
+        {transactions &&
+          transactions
+            .filter((_: any, i: number) => {
+              if (isCompactView && block.transactions.length > 2) {
+                return i === 0 || i === block.transactions.length - 1;
+              }
+              return true;
+            })
+            .map((tx: EthereumTransaction, i: number) => (
+              <React.Fragment key={i}>
+                <div className="Transaction">
+                  <span>
+                    Tx({block.transactions.indexOf(tx) + 1}) Tx hash:
+                    {tx.hash && formatHash(tx.hash)}
+                  </span>
+                </div>
+                {isCompactView && i === 0 && block.transactions.length > 2 && (
+                  <div>...</div>
+                )}
+              </React.Fragment>
+            ))}
       </div>
     </div>
   );

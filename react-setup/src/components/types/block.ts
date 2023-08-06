@@ -8,11 +8,9 @@ export interface EthereumTransaction
   hash?: string;
 }
 
-export interface BlockType {
-  id: number;
-  nonce: number;
-  hash: string;
-  transactions: EthereumTransaction[];
+export interface BlockType extends Omit<ethers.providers.Block, 'transactions'> {
+  [key: string]: any;
+  transactionsDetailed?: EthereumTransaction[]; 
   data: string;
   timestamp: number;
   previousHash: string;

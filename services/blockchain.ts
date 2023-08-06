@@ -1,14 +1,12 @@
-import { SHA256 } from "crypto-js";
+import { ethers } from "ethers";
+import { db } from "./firebase/index";
 import BlockClass from "../classes/Block";
 import Blockchain from "../classes/Blockchain";
 import { MAX_TRANSACTIONS, TARGET_DIFFICULTY } from "../constants/tx";
-import { ethers, Wallet, utils } from "ethers";
-
 import {
   BlockType,
   EthereumTransaction,
 } from "../react-setup/src/components/types/block";
-import { db } from "./firebase/index";
 
 const blockchain = Blockchain.instance;
 let mempool: EthereumTransaction[] = [];
@@ -21,21 +19,41 @@ export async function initializeMempool() {
   mempool = [...fetchedTransactions];
 }
 
-export async function getMempoolTransactions() {
-  const snapshot = await db.collection("mempool").get();
-  return snapshot.docs.map((doc: any) => doc.data());
-}
-
 export async function initializeBlockchain() {
   const blocksFromDB = await getBlocks();
-  if (blocksFromDB.length > 0) {
+
+  if (blocksFromDB.length === 0) {
+    let genesisBlock = new BlockClass("Genesis block", "0");
+    genesisBlock.timestamp = Date.now();
+    genesisBlock.nonce = ethers.utils.hexlify(0);
+    blockchain.addBlock(genesisBlock);
+    genesisBlock.hash = genesisBlock.toHash();
+
+    try {
+      let genesisBlockData = genesisBlock.toObject();
+      // Use the hash as the document ID
+      let docRef = db.collection("blockchain").doc(genesisBlock.hash);
+      await docRef.set(genesisBlockData);
+    } catch (error) {
+      console.error("Error writing genesis block to Firestore: ", error);
+    }
+  } else {
     for (const blockData of blocksFromDB) {
       let block = new BlockClass(blockData.data, blockData.previousHash);
-      block.id = blockData.id;
       block.timestamp = blockData.timestamp;
-      block.nonce = blockData.nonce;
-      block.hash = blockData.hash;
       block.transactions = blockData.transactions;
+      block.transactionsDetailed = blockData.transactionsDetailed;
+      block.difficulty = blockData.difficulty;
+      block.gasLimit =
+        blockData.gasLimit !== undefined
+          ? ethers.BigNumber.from(blockData.gasLimit)
+          : ethers.BigNumber.from(0);
+      block.gasUsed =
+        blockData.gasUsed !== undefined
+          ? ethers.BigNumber.from(blockData.gasUsed)
+          : ethers.BigNumber.from(0);
+      block.miner = blockData.miner;
+      block.extraData = blockData.extraData;
       blockchain.addBlock(block);
     }
   }
@@ -51,31 +69,60 @@ export async function addTransaction(transaction: EthereumTransaction) {
     console.error("Error writing transaction to Firestore: ", error);
   }
 }
-
 export async function mine(): Promise<BlockType> {
-  const previousHash = blockchain.getLatestBlock().hash;
-  const block: BlockType = new BlockClass("", previousHash);
+  try {
+    console.log("Mining started...");
+    const previousHash = blockchain.getLatestBlock().hash;
+    const block = new BlockClass("", previousHash);
+    let selectedTransactions: EthereumTransaction[] = mempool.splice(
+      0,
+      Math.min(mempool.length, MAX_TRANSACTIONS)
+    );
+    selectedTransactions = prepareTransactionsForBlock(selectedTransactions);
+    selectedTransactions.forEach((tx) => {
+      if (isNaN(Number(tx.gas))) {
+        console.log("Invalid gas value:", tx);
+      }
+    });
 
-  let selectedTransactions: EthereumTransaction[] = [];
+    block.transactions = selectedTransactions.map((t) => t.hash || "");
+    block.transactionsDetailed = selectedTransactions;
+    calculateProofOfWork(block);
+    console.log("Setting block attributes...");
+    block.number = blockchain.getLatestBlock().number + 1;
+    block.difficulty = 100;
+    block.gasLimit = ethers.BigNumber.from(5000000);
+    block.gasUsed = ethers.BigNumber.from(
+      selectedTransactions
+        .filter(
+          (tx) => typeof tx.gas === "number" || typeof tx.gasLimit === "number"
+        )
+        .reduce((sum, tx) => sum + Number(tx.gas || tx.gasLimit), 0)
+    );
+    block.miner = "0x1234567890abcdef"; 
+    block.extraData = ""; 
 
-  if (mempool.length > MAX_TRANSACTIONS) {
-    selectedTransactions = mempool.splice(0, MAX_TRANSACTIONS);
-  } else {
-    selectedTransactions = [...mempool];
-    mempool.length = 0;
+    console.log("Adding block to blockchain...");
+    blockchain.addBlock(block);
+
+    console.log("Saving block to database...");
+    await saveBlockToDatabase(block);
+
+    console.log("Removing transactions from mempool...");
+    await removeTransactionsFromMempool(selectedTransactions);
+
+    console.log("Mining completed:");
+    return block;
+  } catch (error) {
+    console.error("Error during mining:", error);
+    throw error;
   }
+}
 
-  const toHexString = (value: ethers.BigNumberish | undefined): string => {
-    if (value === undefined) {
-      throw new Error("Value is undefined");
-    }
-
-    return typeof value === "string"
-      ? value
-      : ethers.BigNumber.from(value).toHexString();
-  };
-
-  selectedTransactions = selectedTransactions.map((transaction) => {
+function prepareTransactionsForBlock(
+  selectedTransactions: EthereumTransaction[]
+): EthereumTransaction[] {
+  return selectedTransactions.map((transaction) => {
     const transactionFields = [
       toHexString(transaction.nonce),
       toHexString(transaction.gasPrice),
@@ -93,25 +140,31 @@ export async function mine(): Promise<BlockType> {
       hash: rawTransactionHash,
     };
   });
+}
 
-  block.transactions = selectedTransactions;
+function toHexString(value: ethers.BigNumberish | undefined): string {
+  if (value === undefined) {
+    throw new Error("Value is undefined");
+  }
 
-  let hashOfBlock: string;
+  return typeof value === "string"
+    ? value
+    : ethers.BigNumber.from(value).toHexString();
+}
+
+function calculateProofOfWork(block: BlockType): BlockType {
   let n = 0;
   do {
-    block.nonce = n;
-    hashOfBlock = SHA256(JSON.stringify(block)).toString();
+    block.nonce = ethers.utils.hexlify(n);
+    block.hash = block.toHash();
     n++;
-  } while (BigInt(`0x${hashOfBlock}`) > TARGET_DIFFICULTY);
+  } while (BigInt(`${block.hash}`) > TARGET_DIFFICULTY);
 
-  block.hash = hashOfBlock;
   block.timestamp = Date.now();
-  block.previousHash = blockchain.chain.length
-    ? blockchain.chain[blockchain.chain.length - 1].hash
-    : "";
-  block.toHash = () => block.hash;
-  blockchain.addBlock(block);
+  return block;
+}
 
+async function saveBlockToDatabase(block: BlockType) {
   try {
     let blockData = block.toObject();
     let docRef = db.collection("blockchain").doc(block.hash);
@@ -119,12 +172,15 @@ export async function mine(): Promise<BlockType> {
   } catch (error) {
     console.error("Error writing to Firestore: ", error);
   }
+}
 
-  selectedTransactions.forEach((transaction) => {
-    const index = mempool.findIndex((t) => t.id === transaction.id);
-    if (index !== -1) {
-      mempool.splice(index, 1);
-    }
+async function removeTransactionsFromMempool(
+  transactions: EthereumTransaction[]
+) {
+  const transactionIdsToRemove = new Set(transactions.map((t) => t.id));
+  mempool = mempool.filter((t) => !transactionIdsToRemove.has(t.id));
+
+  transactions.forEach((transaction) => {
     db.collection("mempool")
       .doc(transaction.id)
       .delete()
@@ -132,8 +188,6 @@ export async function mine(): Promise<BlockType> {
         console.error("Error removing transaction from Firestore: ", error);
       });
   });
-
-  return block;
 }
 
 export async function getBlocks() {

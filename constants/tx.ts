@@ -1,4 +1,4 @@
 export const TARGET_DIFFICULTY: bigint = BigInt(
-  "0x0fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 );
 export const MAX_TRANSACTIONS: number = 10;

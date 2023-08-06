@@ -104,3 +104,26 @@ button.mine::before {
 button:hover {
   background-color: #f57c00;
 }
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loader {
+  border: 16px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 16px solid #3498db;
+  width: 120px;
+  height: 120px;
+  animation: spin 2s linear infinite;
+  margin-top: 70px;
+  margin-left: 40px;
+}
+
+.loader.mempool{
+  height: 40px;
+  width: 40px;
+  margin-top: 30px;
+  margin-left: 40px;
+}

@@ -1,28 +1,27 @@
-import Block from "./Block";
-import SHA256 from "crypto-js/sha256";
+import { BlockType } from "../react-setup/src/components/types/block";
 
 class Blockchain {
-  chain: Block[];
+  chain: BlockType[];
   static instance = new Blockchain();
 
-  constructor(initialChain: Block[] = [new Block("Genesis block", "")]) {
+  constructor(initialChain: BlockType[] = []) {
     this.chain = initialChain;
   }
 
-  addBlock(newBlock: Block) {
-    newBlock.previousHash = this.chain[this.chain.length - 1].toHash();
+  addBlock(newBlock: BlockType) {
+    if (this.chain.length > 0) {
+      newBlock.previousHash = this.getLatestBlock().hash;
+    }
+    newBlock.hash = newBlock.toHash();
     this.chain.push(newBlock);
   }
 
   isValid() {
     let isValid = true;
 
-    for (let i = this.chain.length - 1; i >= 1; i--) {
+    for (let i = 1; i < this.chain.length; i++) {
       if (
-        this.chain[i].previousHash.toString() !==
-        SHA256(
-          this.chain[i - 1].data + this.chain[i - 1].previousHash
-        ).toString()
+        this.chain[i].previousHash !== this.chain[i - 1].hash
       ) {
         isValid = false;
       }
@@ -31,7 +30,7 @@ class Blockchain {
     return isValid;
   }
 
-  getLatestBlock(): Block {
+  getLatestBlock(): BlockType {
     return this.chain[this.chain.length - 1];
   }
 }

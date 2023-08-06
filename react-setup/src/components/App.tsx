@@ -1,4 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import "./styles/App.css";
 import BlockView from "./BlockView";
 import MempoolView from "./MempoolView";
@@ -13,22 +19,45 @@ const mineButtonSound = new Audio("/mineSound.mp3");
 
 const App = () => {
   const [blocks, setBlocks] = useState<BlockType[]>([]);
+  const [isLoadingBlockchain, setIsLoadingBlockchain] = useState(false);
   const [mempool, setMempool] = useState<EthereumTransaction[]>([]);
+  const [isLoadingMempool, setIsLoadingMempool] = useState(false);
 
-  const fetchBlockchain = () => {
-    fetch(`${backendApiUrl}/blockchain`)
-      .then((res) => res.json())
-      .then((blocks: BlockType[]) => setBlocks(blocks));
+  const useFetchData = <T extends unknown>(
+    url: string,
+    setData: React.Dispatch<React.SetStateAction<T>>
+  ) => {
+    const fetchData = useCallback(() => {
+      fetch(url)
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setData(data);
+        })
+        .catch((error) => {
+          console.log(
+            "There was a problem with your fetch operation: " + error.message
+          );
+        });
+    }, [url, setData]);
+
+    useEffect(() => {
+      fetchData();
+    }, [fetchData]);
+
+    return fetchData;
   };
 
-  const fetchMempool = () => {
-    fetch(`${backendApiUrl}/mempool`)
-      .then((res) => res.json())
-      .then((mempoolData) => setMempool(mempoolData));
-  };
+  const fetchBlockchain = useFetchData(
+    `${backendApiUrl}/blockchain`,
+    setBlocks
+  );
 
-  useEffect(fetchBlockchain, []);
-  useEffect(fetchMempool, []);
+  const fetchMempool = useFetchData(`${backendApiUrl}/mempool`, setMempool);
 
   const getNonceForAddress = async (address: string): Promise<number> => {
     // TO DO: add logic to fetch the nonce for the given address from the Ethereum network or your backend
@@ -37,7 +66,7 @@ const App = () => {
 
   const addTransaction = async () => {
     buttonClickSound.play();
-
+    setIsLoadingMempool(true);
     let wallet = Wallet.createRandom();
     let inputPrivateKey = wallet.privateKey;
     let inputPublicKey = wallet.publicKey;
@@ -53,7 +82,7 @@ const App = () => {
       gasLimit: 21000,
       to: outputWallet.address,
       value: ethers.utils.parseEther((Math.random() * 10).toString()),
-      data: utils.hexlify([]), 
+      data: utils.hexlify([]),
     };
 
     const transaction = await wallet.signTransaction(txData);
@@ -71,14 +100,19 @@ const App = () => {
       },
       body: JSON.stringify(transactionToSend),
     })
-      .then(() => setMempool([...mempool, transactionToSend]))
+      .then(() => {
+        setMempool([...mempool, transactionToSend]);
+        setIsLoadingMempool(false);
+      })
       .catch((error) => {
         setMempool(mempool.filter((tx) => tx.to !== transactionToSend.to));
+        setIsLoadingMempool(false);
         console.error("Error adding transaction:", error);
       });
   };
 
   const mineBlock = () => {
+    setIsLoadingBlockchain(true);
     mineButtonSound.play();
     fetch(`${backendApiUrl}/mine`, {
       method: "GET",
@@ -86,14 +120,23 @@ const App = () => {
       .then(() => {
         fetchBlockchain();
         fetchMempool();
+        setIsLoadingBlockchain(false);
       })
-      .catch((error) => console.error("Error mining block:", error));
+      .catch((error) => {
+        setIsLoadingBlockchain(false);
+        console.error("Error mining block:", error);
+      });
   };
 
   return (
     <div className="App">
       <MempoolView mempool={mempool} />
-      <button onClick={addTransaction}>Add Tx to Mempool</button>
+      {isLoadingMempool ? (
+        <div className="loader mempool" />
+      ) : (
+        <button onClick={addTransaction}>Add Tx to Mempool</button>
+      )}
+
       <button className="mine" onClick={mineBlock}>
         Mine Block
       </button>
@@ -102,13 +145,15 @@ const App = () => {
         <div className="BlocksContainer">
           {blocks
             .sort((a, b) => a.timestamp - b.timestamp)
-            .map((block: BlockType) => (
+            .map((block: BlockType, index: number) => (
               <BlockView
-                key={block.id}
+                key={index}
                 block={block}
+                index={index}
                 isCompactView={blocks.length > 9}
               />
             ))}
+          {isLoadingBlockchain && <div className="loader" />}
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ import MempoolView from "./MempoolView";
 import { BlockType, EthereumTransaction } from "./types/block";
 import { ec as EC } from "elliptic";
 import { ethers, Wallet, utils } from "ethers";
+import { getAddress, hexStringToUint8Array } from "../utils/crypto";
 
 const ec = new EC("secp256k1");
 const backendApiUrl = process.env.BACKEND_API_URL;
@@ -20,6 +21,7 @@ const mineButtonSound = new Audio("/mineSound.mp3");
 const App = () => {
   const [blocks, setBlocks] = useState<BlockType[]>([]);
   const [mempool, setMempool] = useState<EthereumTransaction[]>([]);
+  const [isDisplayed, setIsDisplayed] = useState<boolean>(true);
 
   const useFetchData = <T extends unknown>(
     url: string,
@@ -55,10 +57,7 @@ const App = () => {
     setBlocks
   );
 
-  const fetchMempool = useFetchData(`${backendApiUrl}/mempool`, setMempool);
-
   const getNonceForAddress = async (address: string): Promise<number> => {
-    // TO DO: add logic to fetch the nonce for the given address from the Ethereum network or your backend
     return Math.floor(Math.random() * 1000);
   };
 
@@ -85,10 +84,12 @@ const App = () => {
     const transaction = await wallet.signTransaction(txData);
 
     const transactionToSend: EthereumTransaction = {
-      from: wallet.address,
+      from: getAddress(hexStringToUint8Array(wallet.privateKey)),
       ...txData,
       id: utils.keccak256(transaction),
     };
+
+    setMempool((prevMempool) => [...prevMempool, transactionToSend]);
 
     try {
       await fetch(`${backendApiUrl}/transaction`, {
@@ -98,49 +99,77 @@ const App = () => {
         },
         body: JSON.stringify(transactionToSend),
       });
-
-      setMempool([...mempool, transactionToSend]);
     } catch (error) {
-      setMempool(mempool.filter((tx) => tx.to !== transactionToSend.to));
+      setMempool((prevMempool) =>
+        prevMempool.filter((tx) => tx.id !== transactionToSend.id)
+      );
       console.error("Error adding transaction:", error);
     }
   };
 
-  const mineBlock = () => {
+  const mineBlock = async () => {
     mineButtonSound.play();
-    fetch(`${backendApiUrl}/mine`, {
+    const currentMempool = [...mempool];
+    setMempool((prevMempool) => prevMempool.slice(0, -10));
+
+    await fetch(`${backendApiUrl}/mine`, {
       method: "GET",
     })
-      .then(() => {
-        fetchBlockchain();
-        fetchMempool();
-      })
+      .then(() => fetchBlockchain())
       .catch((error) => {
         console.error("Error mining block:", error);
       });
   };
 
-  function LoadingDots() {
-    const [dots, setDots] = useState('.');
-  
-    useEffect(() => {
-      // This interval will be cleared when the component is unmounted
-      const interval = setInterval(() => {
-        setDots((dots) => (dots.length < 3 ? dots + '.' : '.'));
-      }, 500); // 500ms delay between state updates
-  
-      return () => clearInterval(interval); // Clean up on unmount
-    }, []); // Empty dependency array so effect only runs on mount and unmount
-  
-    return <span>{dots}</span>;
-  }
+  const deleteBlockchain = async () => {
+    setBlocks([]);
+    setIsDisplayed(false);
+    try {
+      await fetch(`${backendApiUrl}/delete`, {
+        method: "GET",
+      });
+    } catch (error) {
+      fetchBlockchain();
+      console.error("Error deleting blockchain:", error);
+    }
+  };
+
+  const initializeBlockchain = async () => {
+    setIsDisplayed(true);
+    setBlocks([
+      {
+        data: "Genesis block",
+        nonce: "0x0000000000000042",
+        hash: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
+        timestamp: Date.now(),
+      } as any,
+    ]);
+
+    try {
+      const response = await fetch(`${backendApiUrl}/init`, {
+        method: "GET",
+      });
+    } catch (error) {
+      console.error("Error initializing blockchain:", error);
+    }
+  };
 
   return (
     <div className="App">
       <MempoolView mempool={mempool} />
-        <button onClick={addTransaction}>Add Tx to Mempool </button>
-      <button className="mine" onClick={mineBlock}>
-        Mine Block
+      {isDisplayed && (
+        <>
+          <button onClick={addTransaction}>Add Tx to Mempool</button>
+          <button className="mine" onClick={mineBlock}>
+            Mine Block
+          </button>
+          <button className="delete" onClick={deleteBlockchain}>
+            Delete Blockchain
+          </button>
+        </>
+      )}
+      <button className="init" onClick={initializeBlockchain}>
+        Initiliaze Blockchain
       </button>
       <div className="Blockchain">
         <h1 className="gameFont">Blockchain</h1>
@@ -152,7 +181,7 @@ const App = () => {
                 key={index}
                 block={block}
                 index={index}
-                isCompactView={blocks.length > 9}
+                isCompactView={blocks.length > 6}
               />
             ))}
         </div>

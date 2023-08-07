@@ -13,6 +13,15 @@ export function getAddress(publicKey: Uint8Array): string {
   return `0x${last20ofHash}`;
 }
 
+export function hexStringToUint8Array(hexString: string): Uint8Array {
+  const bytes = new Uint8Array(Math.ceil(hexString.length / 2));
+  for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hexString.substr(i * 2, 2), 16);
+  }
+  return bytes;
+}
+
+
 export function formatHash(hash: string): string {
   const formattedHash: string = `${hash.slice(0, 2)}..${hash.slice(-3)}`;
   return formattedHash;

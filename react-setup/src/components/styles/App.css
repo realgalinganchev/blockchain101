@@ -136,6 +136,26 @@ button.mine::after {
   font-weight: bold;
 }
 
+button.delete::before {
+  content: "🗑 ";
+  font-weight: bold;
+}
+
+button.delete::after {
+  content: " ↓";
+  font-weight: bold;
+}
+
+button.init::before {
+  content: "⛓ ";
+  font-weight: bold;
+}
+
+button.init::after {
+  content: " ↓";
+  font-weight: bold;
+}
+
 button:hover {
   background-color: #05ff00;
   color: #000000;

@@ -11,7 +11,7 @@ class Blockchain {
   addBlock(newBlock: BlockType) {
     if (this.chain.length > 0) {
       newBlock.previousHash = this.getLatestBlock().hash;
-    }
+    } 
     newBlock.hash = newBlock.toHash();
     this.chain.push(newBlock);
   }

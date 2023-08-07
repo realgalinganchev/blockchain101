@@ -52,15 +52,9 @@ const App = () => {
 
   const fetchMempool = useFetchData(`${backendApiUrl}/mempool`, setMempool);
 
-  const getNonceForAddress = async (address: string): Promise<number> => {
-    // TO DO: add logic to fetch the nonce for the given address from the Ethereum network or your backend
-    return Math.floor(Math.random() * 1000);
-  };
-
   const addTransaction = async () => {
     buttonClickSound.play();
     let wallet = Wallet.createRandom();
-    let inputPrivateKey = wallet.privateKey;
     let inputPublicKey = wallet.publicKey;
 
     let outputWallet;
@@ -69,7 +63,7 @@ const App = () => {
     } while (inputPublicKey === outputWallet.publicKey);
 
     const txData = {
-      nonce: await getNonceForAddress(wallet.address),
+      nonce: Math.floor(Math.random() * 1000),
       gasPrice: utils.parseUnits("20", "gwei"),
       gasLimit: 21000,
       to: getAddress(hexStringToUint8Array(outputWallet.publicKey.slice(2))),
@@ -114,21 +108,6 @@ const App = () => {
         console.error("Error mining block:", error);
       });
   };
-
-  function LoadingDots() {
-    const [dots, setDots] = useState(".");
-
-    useEffect(() => {
-      // This interval will be cleared when the component is unmounted
-      const interval = setInterval(() => {
-        setDots((dots) => (dots.length < 3 ? dots + "." : "."));
-      }, 500); // 500ms delay between state updates
-
-      return () => clearInterval(interval); // Clean up on unmount
-    }, []); // Empty dependency array so effect only runs on mount and unmount
-
-    return <span>{dots}</span>;
-  }
 
   return (
     <div className="App">

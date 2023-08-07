@@ -1,11 +1,9 @@
 import { Router, Request, Response } from "express";
-import Blockchain from "../classes/Blockchain";
-import { addTransaction, mine, mempool } from "../services/blockchain";
-import { db } from "../services/firebase";
+import { addTransaction, mineBlock, mempool } from "../services/blockchain";
+import { db } from "../services/db/firebaseInit";
 import { BlockType } from "../react-setup/src/types/block";
 
 const router = Router();
-const blockchain = Blockchain.instance;
 
 router.post("/transaction", (req: Request, res: Response) => {
   addTransaction(req.body);
@@ -30,7 +28,7 @@ router.get("/mempool", (req, res) => {
 });
 
 router.get("/mine", (_req: Request, res: Response) => {
-  const newBlock = mine();
+  const newBlock = mineBlock();
   res.json(newBlock);
 });
 

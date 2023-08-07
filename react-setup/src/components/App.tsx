@@ -19,9 +19,7 @@ const mineButtonSound = new Audio("/mineSound.mp3");
 
 const App = () => {
   const [blocks, setBlocks] = useState<BlockType[]>([]);
-  const [isLoadingBlockchain, setIsLoadingBlockchain] = useState(false);
   const [mempool, setMempool] = useState<EthereumTransaction[]>([]);
-  const [isLoadingMempool, setIsLoadingMempool] = useState(false);
 
   const useFetchData = <T extends unknown>(
     url: string,
@@ -66,7 +64,6 @@ const App = () => {
 
   const addTransaction = async () => {
     buttonClickSound.play();
-    setIsLoadingMempool(true);
     let wallet = Wallet.createRandom();
     let inputPrivateKey = wallet.privateKey;
     let inputPublicKey = wallet.publicKey;
@@ -93,26 +90,23 @@ const App = () => {
       id: utils.keccak256(transaction),
     };
 
-    fetch(`${backendApiUrl}/transaction`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(transactionToSend),
-    })
-      .then(() => {
-        setMempool([...mempool, transactionToSend]);
-        setIsLoadingMempool(false);
-      })
-      .catch((error) => {
-        setMempool(mempool.filter((tx) => tx.to !== transactionToSend.to));
-        setIsLoadingMempool(false);
-        console.error("Error adding transaction:", error);
+    try {
+      await fetch(`${backendApiUrl}/transaction`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(transactionToSend),
       });
+
+      setMempool([...mempool, transactionToSend]);
+    } catch (error) {
+      setMempool(mempool.filter((tx) => tx.to !== transactionToSend.to));
+      console.error("Error adding transaction:", error);
+    }
   };
 
   const mineBlock = () => {
-    setIsLoadingBlockchain(true);
     mineButtonSound.play();
     fetch(`${backendApiUrl}/mine`, {
       method: "GET",
@@ -120,23 +114,31 @@ const App = () => {
       .then(() => {
         fetchBlockchain();
         fetchMempool();
-        setIsLoadingBlockchain(false);
       })
       .catch((error) => {
-        setIsLoadingBlockchain(false);
         console.error("Error mining block:", error);
       });
   };
 
+  function LoadingDots() {
+    const [dots, setDots] = useState('.');
+  
+    useEffect(() => {
+      // This interval will be cleared when the component is unmounted
+      const interval = setInterval(() => {
+        setDots((dots) => (dots.length < 3 ? dots + '.' : '.'));
+      }, 500); // 500ms delay between state updates
+  
+      return () => clearInterval(interval); // Clean up on unmount
+    }, []); // Empty dependency array so effect only runs on mount and unmount
+  
+    return <span>{dots}</span>;
+  }
+
   return (
     <div className="App">
       <MempoolView mempool={mempool} />
-      {isLoadingMempool ? (
-        <div className="loader mempool" />
-      ) : (
-        <button onClick={addTransaction}>Add Tx to Mempool</button>
-      )}
-
+        <button onClick={addTransaction}>Add Tx to Mempool </button>
       <button className="mine" onClick={mineBlock}>
         Mine Block
       </button>
@@ -153,7 +155,6 @@ const App = () => {
                 isCompactView={blocks.length > 9}
               />
             ))}
-          {isLoadingBlockchain && <div className="loader" />}
         </div>
       </div>
     </div>

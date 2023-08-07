@@ -139,8 +139,9 @@ button.mine::after {
 button:hover {
   background-color: #05ff00;
   color: #000000;
-  border-color: #000000;
+  border: 5px solid #000000;
   text-shadow: none;
+  box-shadow: none;
 }
 
 @keyframes spin {

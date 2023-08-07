@@ -69,9 +69,9 @@ export async function addTransaction(transaction: EthereumTransaction) {
     console.error("Error writing transaction to Firestore: ", error);
   }
 }
+
 export async function mine(): Promise<BlockType> {
   try {
-    console.log("Mining started...");
     const previousHash = blockchain.getLatestBlock().hash;
     const block = new BlockClass("", previousHash);
     let selectedTransactions: EthereumTransaction[] = mempool.splice(
@@ -79,42 +79,32 @@ export async function mine(): Promise<BlockType> {
       Math.min(mempool.length, MAX_TRANSACTIONS)
     );
     selectedTransactions = prepareTransactionsForBlock(selectedTransactions);
-    selectedTransactions.forEach((tx) => {
-      if (isNaN(Number(tx.gas))) {
-        console.log("Invalid gas value:", tx);
-      }
+    selectedTransactions = selectedTransactions.filter((tx) => {
+      ethers.BigNumber.from(tx.gasLimit);
+      return true;
     });
 
     block.transactions = selectedTransactions.map((t) => t.hash || "");
     block.transactionsDetailed = selectedTransactions;
     calculateProofOfWork(block);
-    console.log("Setting block attributes...");
     block.number = blockchain.getLatestBlock().number + 1;
     block.difficulty = 100;
     block.gasLimit = ethers.BigNumber.from(5000000);
     block.gasUsed = ethers.BigNumber.from(
       selectedTransactions
-        .filter(
-          (tx) => typeof tx.gas === "number" || typeof tx.gasLimit === "number"
-        )
-        .reduce((sum, tx) => sum + Number(tx.gas || tx.gasLimit), 0)
+        .map((tx) => ethers.BigNumber.from(tx.gasLimit))
+        .reduce((sum, gasLimit) => sum.add(gasLimit), ethers.BigNumber.from(0))
     );
-    block.miner = "0x1234567890abcdef"; 
-    block.extraData = ""; 
 
-    console.log("Adding block to blockchain...");
+    block.miner = "0x1234567890abcdef";
+    block.extraData = "";
     blockchain.addBlock(block);
 
-    console.log("Saving block to database...");
     await saveBlockToDatabase(block);
-
-    console.log("Removing transactions from mempool...");
     await removeTransactionsFromMempool(selectedTransactions);
 
-    console.log("Mining completed:");
     return block;
   } catch (error) {
-    console.error("Error during mining:", error);
     throw error;
   }
 }
@@ -159,8 +149,9 @@ function calculateProofOfWork(block: BlockType): BlockType {
     block.hash = block.toHash();
     n++;
   } while (BigInt(`${block.hash}`) > TARGET_DIFFICULTY);
-
+  
   block.timestamp = Date.now();
+
   return block;
 }
 

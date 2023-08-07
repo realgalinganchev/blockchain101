@@ -1,15 +1,11 @@
 import { Router, Request, Response } from "express";
-import {
-  addTransaction,
-  mineBlock,
-  mempool,
-  initializeBlockchain,
-} from "../services/blockchain";
+import Blockchain from "../classes/Blockchain";
+import { addTransaction, mine, mempool } from "../services/blockchain";
 import { db } from "../services/firebase";
 import { BlockType } from "../react-setup/src/components/types/block";
-import { deleteAllBlocks } from "../utils/db";
 
 const router = Router();
+const blockchain = Blockchain.instance;
 
 router.post("/transaction", (req: Request, res: Response) => {
   addTransaction(req.body);
@@ -34,18 +30,8 @@ router.get("/mempool", (req, res) => {
 });
 
 router.get("/mine", (_req: Request, res: Response) => {
-  const newBlock = mineBlock();
+  const newBlock = mine();
   res.json(newBlock);
-});
-
-router.get("/delete", (_req: Request, res: Response) => {
-  deleteAllBlocks();
-  res.sendStatus(200);
-});
-
-router.get("/init", async (_req: Request, res: Response) => {
-  const genesisBlock = await initializeBlockchain();
-  res.json(genesisBlock);
 });
 
 export default router;

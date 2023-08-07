@@ -2,7 +2,7 @@ import path from "path";
 import cors from "cors";
 import express, { Express } from "express";
 import routes from "./routes";
-import { initializeMempool } from "./services/blockchain";
+import { initializeBlockchain, initializeMempool } from "./services/blockchain";
 
 require("dotenv").config();
 
@@ -21,8 +21,10 @@ app.use(
 app.use(express.static("client"));
 app.use("/", routes);
 
-initializeMempool().then(() => {
-  app.listen(9001, () => console.log("Listening on port 9001"));
+initializeBlockchain().then(() => {
+  initializeMempool().then(() => {
+    app.listen(9001, () => console.log("Listening on port 9001"));
+  });
 });
 
 app.get("/", (req, res) => {

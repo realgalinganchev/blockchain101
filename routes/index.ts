@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import Blockchain from "../classes/Blockchain";
 import { addTransaction, mine, mempool } from "../services/blockchain";
 import { db } from "../services/firebase";
-import { BlockType } from "../react-setup/src/components/types/block";
+import { BlockType } from "../react-setup/src/types/block";
 
 const router = Router();
 const blockchain = Blockchain.instance;

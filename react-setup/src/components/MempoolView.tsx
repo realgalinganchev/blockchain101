@@ -1,6 +1,6 @@
 import React from "react";
-import { EthereumTransaction } from "./types/block";
-import "./styles/App.css";
+import { EthereumTransaction } from "../types/block";
+import "../styles/App.css";
 import { formatHash } from "../utils/crypto";
 
 interface MempoolViewProps {

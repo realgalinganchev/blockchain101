@@ -1,16 +1,11 @@
-import React, {
-  Dispatch,
-  SetStateAction,
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
-import "./styles/App.css";
-import BlockView from "./BlockView";
-import MempoolView from "./MempoolView";
-import { BlockType, EthereumTransaction } from "./types/block";
 import { ec as EC } from "elliptic";
 import { ethers, Wallet, utils } from "ethers";
+import React, { useCallback, useEffect, useState } from "react";
+import "./styles/App.css";
+import BlockView from "./components/BlockView";
+import MempoolView from "./components/MempoolView";
+import { BlockType, EthereumTransaction } from "./types/block";
+import { getAddress, hexStringToUint8Array } from "./utils/crypto";
 
 const ec = new EC("secp256k1");
 const backendApiUrl = process.env.BACKEND_API_URL;
@@ -77,7 +72,7 @@ const App = () => {
       nonce: await getNonceForAddress(wallet.address),
       gasPrice: utils.parseUnits("20", "gwei"),
       gasLimit: 21000,
-      to: outputWallet.address,
+      to: getAddress(hexStringToUint8Array(outputWallet.publicKey.slice(2))),
       value: ethers.utils.parseEther((Math.random() * 10).toString()),
       data: utils.hexlify([]),
     };
@@ -121,24 +116,24 @@ const App = () => {
   };
 
   function LoadingDots() {
-    const [dots, setDots] = useState('.');
-  
+    const [dots, setDots] = useState(".");
+
     useEffect(() => {
       // This interval will be cleared when the component is unmounted
       const interval = setInterval(() => {
-        setDots((dots) => (dots.length < 3 ? dots + '.' : '.'));
+        setDots((dots) => (dots.length < 3 ? dots + "." : "."));
       }, 500); // 500ms delay between state updates
-  
+
       return () => clearInterval(interval); // Clean up on unmount
     }, []); // Empty dependency array so effect only runs on mount and unmount
-  
+
     return <span>{dots}</span>;
   }
 
   return (
     <div className="App">
       <MempoolView mempool={mempool} />
-        <button onClick={addTransaction}>Add Tx to Mempool </button>
+      <button onClick={addTransaction}>Add Tx to Mempool </button>
       <button className="mine" onClick={mineBlock}>
         Mine Block
       </button>

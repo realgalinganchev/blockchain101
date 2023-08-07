@@ -1,7 +1,7 @@
 import {
   BlockType,
   EthereumTransaction,
-} from "../react-setup/src/components/types/block";
+} from "../react-setup/src/types/block";
 import { ethers } from "ethers";
 
 class Block implements BlockType {

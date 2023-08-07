@@ -6,7 +6,7 @@ import { MAX_TRANSACTIONS, TARGET_DIFFICULTY } from "../constants/tx";
 import {
   BlockType,
   EthereumTransaction,
-} from "../react-setup/src/components/types/block";
+} from "../react-setup/src/types/block";
 
 const blockchain = Blockchain.instance;
 let mempool: EthereumTransaction[] = [];

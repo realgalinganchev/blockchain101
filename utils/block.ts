@@ -17,8 +17,12 @@ export function constructBlock(blockData: any): BlockClass {
   block.transactions = blockData.transactions;
   block.transactionsDetailed = blockData.transactionsDetailed;
   block.difficulty = blockData.difficulty;
-  block.gasLimit = ethers.BigNumber.from(blockData.gasLimit);
-  block.gasUsed = ethers.BigNumber.from(blockData.gasUsed);
+  block.gasLimit = blockData.gasLimit
+    ? ethers.BigNumber.from(blockData.gasLimit)
+    : ethers.BigNumber.from(0);
+  block.gasUsed = blockData.gasUsed
+    ? ethers.BigNumber.from(blockData.gasUsed)
+    : ethers.BigNumber.from(0);
   block.miner = blockData.miner;
   block.extraData = blockData.extraData;
   return block;

@@ -1,11 +1,11 @@
 import Blockchain from "../classes/Blockchain";
 import { MAX_TRANSACTIONS } from "../constants/tx";
+import { calculateProofOfWork } from "../utils/calc";
+import { getBlocks, saveBlock } from "./db/blockchain";
 import { BlockType, EthereumTransaction } from "../react-setup/src/types/block";
 import { constructBlock, createGenesisBlock, createNewBlock } from "../utils/block";
 import { getSelectedTransactions, prepareTransactionsForBlock } from "../utils/transaction";
-import { calculateProofOfWork } from "../utils/calc";
 import { addTransactionToMempool, getTransactionsFromMempool, removeTransactionFromMempool } from "./db/mempool";
-import { getBlocks, saveBlock } from "./db/blockchain";
 
 const blockchain = Blockchain.instance;
 let mempool: EthereumTransaction[] = [];

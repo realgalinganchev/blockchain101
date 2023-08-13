@@ -57,7 +57,7 @@ const App = () => {
   };
 
   return (
-    <div className="App">
+    <div className="app">
       <MempoolView mempool={mempool} isLoading={isLoadingTx} />
       <button onClick={addTransaction} disabled={isLoadingTx}>
         Add Tx to Mempool
@@ -65,9 +65,9 @@ const App = () => {
       <button className="mine" onClick={mineBlock} disabled={isLoadingBlock}>
         Mine Block
       </button>
-      <div className="Blockchain">
-        <h1 className="gameFont">Blockchain</h1>
-        <div className="BlocksContainer">
+      <div className="blockchain">
+        <h1 className="game-font">Blockchain</h1>
+        <div className="blocks-container">
           {blocks
             .sort((a, b) => a.timestamp - b.timestamp)
             .map((block: BlockType, index: number) => (

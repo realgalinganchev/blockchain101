@@ -9,10 +9,10 @@
 }
 
 body,
-.Block,
-.Mempool,
+.block,
+.mempool,
 button,
-.Blockchain {
+.blockchain {
   background-color: var(--background-color);
 }
 
@@ -21,11 +21,11 @@ body {
   color: #ffffff;
 }
 
-.gameFont {
+.game-font {
   font-family: "Press Start 2P", cursive;
 }
 
-.App {
+.app {
   text-align: center;
   margin: 0 auto;
   padding: 0 10px;
@@ -33,7 +33,7 @@ body {
   border-radius: var(--border-radius-default);
 }
 
-.Block {
+.block {
   min-height: 250px;
   width: 195px;
   position: relative;
@@ -45,7 +45,7 @@ body {
   box-shadow: var(--box-shadow-green);
 }
 
-.Block::after {
+.block::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -56,14 +56,14 @@ body {
   border-color: transparent transparent transparent #05ff00;
 }
 
-.BlocksContainer,
-.TransactionList {
+.blocks-container,
+.transaction-list {
   display: flex;
   flex-wrap: wrap;
 }
 
-.Mempool,
-.Transaction {
+.mempool,
+.transaction {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -71,7 +71,7 @@ body {
   box-shadow: var(--box-shadow-pink);
 }
 
-.Mempool {
+.mempool {
   justify-content: center;
   border: 1px solid #f44336;
   padding: 15px;
@@ -79,20 +79,20 @@ body {
   margin-top: 15px;
 }
 
-.EmptyContainer {
+.empty-container {
   padding: 10px;
   font-style: italic;
   color: #888;
 }
 
-.Transaction {
+.transaction {
   border: 1px solid #8bc34a;
   padding: 5px;
   margin: 5px;
   align-items: flex-start;
 }
 
-.Blockchain {
+.blockchain {
   padding: 20px;
   border-radius: var(--border-radius-default);
   box-shadow: var(--box-shadow-pink);
@@ -168,7 +168,7 @@ button:disabled {
   margin-left: 20px;
 }
 
-.BlocksContainer .loader {
+.blocks-container .loader {
   margin-top: 123px;
   margin-left: 75px;
   height: 50px;

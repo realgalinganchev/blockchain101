@@ -10,15 +10,15 @@ interface MempoolViewProps {
 
 const MempoolView: React.FC<MempoolViewProps> = ({ mempool, isLoading }) => {
   return (
-    <div className="Mempool">
-      <h2 className="gameFont">Mempool</h2>
-      <div className="TransactionList">
+    <div className="mempool">
+      <h2 className="game-font">Mempool</h2>
+      <div className="transaction-list">
         {mempool.length === 0 && !isLoading ? (
-          <div className="EmptyContainer">No transactions in the mempool</div>
+          <div className="empty-container">No transactions in the mempool</div>
         ) : (
           <>
             {mempool.map((tx, i) => (
-              <div className="Transaction" key={i}>
+              <div className="transaction" key={i}>
                 {/* Nr for visual purposes only */}
                 <span>Tx Nr: {i + 1}</span>
                 <span>from: {tx.from && formatHash(tx.from)}</span>

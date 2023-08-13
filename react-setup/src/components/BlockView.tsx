@@ -16,8 +16,8 @@ const BlockView: React.FC<BlockViewProps> = ({
 }) => {
   const transactions = block.transactionsDetailed;
   return (
-    <div className="Block">
-      <h5 className="gameFont">Block height:{index + 1}</h5>
+    <div className="block">
+      <h5 className="game-font">Block height:{index + 1}</h5>
       <p>Nonce: {parseInt(block.nonce, 16)}</p>
       <p>Hash: {formatHash(block.hash)}</p>
       <p>Data: {block.data}</p>
@@ -35,7 +35,7 @@ const BlockView: React.FC<BlockViewProps> = ({
             })
             .map((tx: EthereumTransaction, i: number) => (
               <React.Fragment key={i}>
-                <div className="Transaction">
+                <div className="transaction">
                   <span>
                     (
                     {block.transactionsDetailed &&

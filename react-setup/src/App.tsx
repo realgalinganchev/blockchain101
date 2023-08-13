@@ -1,87 +1,46 @@
-import { ec as EC } from "elliptic";
-import { ethers, Wallet, utils } from "ethers";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import "./styles/App.css";
 import BlockView from "./components/BlockView";
+import { createTransaction } from "./utils/calc";
 import MempoolView from "./components/MempoolView";
+import { useFetchData } from "./hooks/useFetchData";
 import { BlockType, EthereumTransaction } from "./types/block";
-import { getAddress, hexStringToUint8Array } from "./utils/crypto";
 
-const backendApiUrl = process.env.BACKEND_API_URL;
-const buttonClickSound = new Audio("/addSound.mp3");
-const mineButtonSound = new Audio("/mineSound.mp3");
+const BUTTON_CLICK_SOUND = new Audio("/addSound.mp3");
+const MINE_BUTTON_SOUND = new Audio("/mineSound.mp3");
+const API_URL = process.env.BACKEND_API_URL;
 
 const App = () => {
+  const [isLoadingTx, setIsLoadingTx] = useState(false);
+  const [isLoadingBlock, setIsLoadingBlock] = useState(false);
+
   const [blocks, setBlocks] = useState<BlockType[]>([]);
   const [mempool, setMempool] = useState<EthereumTransaction[]>([]);
 
-  const useFetchData = <T extends unknown>(
-    url: string,
-    setData: React.Dispatch<React.SetStateAction<T>>
-  ) => {
-    const fetchData = useCallback(() => {
-      fetch(url)
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-          }
-          return res.json();
-        })
-        .then((data) => {
-          setData(data);
-        })
-        .catch((error) => {
-          console.log(
-            "There was a problem with your fetch operation: " + error.message
-          );
-        });
-    }, [url, setData]);
+  const fetchBlockchain = useFetchData(`${API_URL}/blockchain`, setBlocks);
+  const fetchMempool = useFetchData(`${API_URL}/mempool`, setMempool);
 
-    useEffect(() => {
-      fetchData();
-    }, [fetchData]);
-
-    return fetchData;
+  const mineBlock = async () => {
+    setIsLoadingBlock(true);
+    MINE_BUTTON_SOUND.play();
+    try {
+      await fetch(`${API_URL}/mine`);
+      fetchBlockchain();
+      fetchMempool();
+    } catch (error) {
+      console.error("Error mining block:", error);
+    } finally {
+      setIsLoadingBlock(false);
+    }
   };
 
-  const fetchBlockchain = useFetchData(
-    `${backendApiUrl}/blockchain`,
-    setBlocks
-  );
-
-  const fetchMempool = useFetchData(`${backendApiUrl}/mempool`, setMempool);
-
-
-  
   const addTransaction = async () => {
-    buttonClickSound.play();
-    let wallet = Wallet.createRandom();
-    let inputPublicKey = wallet.publicKey;
-
-    let outputWallet;
-    do {
-      outputWallet = Wallet.createRandom();
-    } while (inputPublicKey === outputWallet.publicKey);
-
-    const txData = {
-      nonce: Math.floor(Math.random() * 1000),
-      gasPrice: utils.parseUnits("20", "gwei"),
-      gasLimit: 21000,
-      to: getAddress(hexStringToUint8Array(outputWallet.publicKey.slice(2))),
-      value: ethers.utils.parseEther((Math.random() * 10).toString()),
-      data: utils.hexlify([]),
-    };
-
-    const transaction = await wallet.signTransaction(txData);
-
-    const transactionToSend: EthereumTransaction = {
-      from: wallet.address,
-      ...txData,
-      id: utils.keccak256(transaction),
-    };
+    BUTTON_CLICK_SOUND.play();
+    setIsLoadingTx(true);
 
     try {
-      await fetch(`${backendApiUrl}/transaction`, {
+      const transactionToSend: EthereumTransaction = await createTransaction();
+      await fetch(`${API_URL}/transaction`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -89,32 +48,21 @@ const App = () => {
         body: JSON.stringify(transactionToSend),
       });
 
-      setMempool([...mempool, transactionToSend]);
+      setMempool((prevMempool) => [...prevMempool, transactionToSend]);
     } catch (error) {
-      setMempool(mempool.filter((tx) => tx.to !== transactionToSend.to));
       console.error("Error adding transaction:", error);
+    } finally {
+      setIsLoadingTx(false);
     }
-  };
-
-  const mineBlock = () => {
-    mineButtonSound.play();
-    fetch(`${backendApiUrl}/mine`, {
-      method: "GET",
-    })
-      .then(() => {
-        fetchBlockchain();
-        fetchMempool();
-      })
-      .catch((error) => {
-        console.error("Error mining block:", error);
-      });
   };
 
   return (
     <div className="App">
-      <MempoolView mempool={mempool} />
-      <button onClick={addTransaction}>Add Tx to Mempool </button>
-      <button className="mine" onClick={mineBlock}>
+      <MempoolView mempool={mempool} isLoading={isLoadingTx} />
+      <button onClick={addTransaction} disabled={isLoadingTx}>
+        Add Tx to Mempool
+      </button>
+      <button className="mine" onClick={mineBlock} disabled={isLoadingBlock}>
         Mine Block
       </button>
       <div className="Blockchain">
@@ -130,6 +78,7 @@ const App = () => {
                 isCompactView={blocks.length > 6}
               />
             ))}
+          {isLoadingBlock && <div className="loader"></div>}
         </div>
       </div>
     </div>

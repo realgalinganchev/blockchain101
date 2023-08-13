@@ -1,6 +1,6 @@
 import React from "react";
 import "../styles/App.css";
-import { formatHash } from "../utils/crypto";
+import { formatHash } from "../utils/calc";
 import { BlockType, EthereumTransaction } from "../types/block";
 
 interface BlockViewProps {

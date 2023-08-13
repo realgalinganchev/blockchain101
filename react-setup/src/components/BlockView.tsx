@@ -17,12 +17,13 @@ const BlockView: React.FC<BlockViewProps> = ({
   const transactions = block.transactionsDetailed;
   return (
     <div className="Block">
-      {/* Nr for visual purposes only */}
-      <h5 className="gameFont">Block Nr: {index + 1}</h5>
+      <h5 className="gameFont">Block height:{index + 1}</h5>
       <p>Nonce: {parseInt(block.nonce, 16)}</p>
       <p>Hash: {formatHash(block.hash)}</p>
       <p>Data: {block.data}</p>
-      <p>{index !== 0 && ` Parent Hash: ${formatHash(block.previousHash)}`}</p>
+      <p>{` Parent Hash: ${
+        index === 0 ? "0" : formatHash(block.previousHash)
+      }`}</p>
       <div>
         {transactions &&
           transactions

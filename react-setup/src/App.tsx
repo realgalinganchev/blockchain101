@@ -7,7 +7,6 @@ import MempoolView from "./components/MempoolView";
 import { BlockType, EthereumTransaction } from "./types/block";
 import { getAddress, hexStringToUint8Array } from "./utils/crypto";
 
-const ec = new EC("secp256k1");
 const backendApiUrl = process.env.BACKEND_API_URL;
 const buttonClickSound = new Audio("/addSound.mp3");
 const mineButtonSound = new Audio("/mineSound.mp3");
@@ -52,6 +51,8 @@ const App = () => {
 
   const fetchMempool = useFetchData(`${backendApiUrl}/mempool`, setMempool);
 
+
+  
   const addTransaction = async () => {
     buttonClickSound.play();
     let wallet = Wallet.createRandom();
@@ -126,7 +127,7 @@ const App = () => {
                 key={index}
                 block={block}
                 index={index}
-                isCompactView={blocks.length > 9}
+                isCompactView={blocks.length > 6}
               />
             ))}
         </div>

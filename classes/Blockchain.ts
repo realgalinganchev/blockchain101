@@ -16,20 +16,6 @@ class Blockchain {
     this.chain.push(newBlock);
   }
 
-  isValid() {
-    let isValid = true;
-
-    for (let i = 1; i < this.chain.length; i++) {
-      if (
-        this.chain[i].previousHash !== this.chain[i - 1].hash
-      ) {
-        isValid = false;
-      }
-    }
-
-    return isValid;
-  }
-
   getLatestBlock(): BlockType {
     return this.chain[this.chain.length - 1];
   }

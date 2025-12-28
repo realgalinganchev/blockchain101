@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import BlockClass from "../classes/Block";
-import { BlockType, EthereumTransaction } from "../react-setup/src/types/block";
+import { BlockType, EthereumTransaction } from "../types/block";
 import { getTotalGasUsed } from "./calc";
 
 export function createGenesisBlock(): BlockClass {

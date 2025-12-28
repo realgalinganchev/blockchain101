@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { addTransaction, mineBlock, mempool, getDifficulty, setDifficulty, addMiningProgressListener, removeMiningProgressListener, getMiningState, abortMining } from "../services/blockchain";
 import { db } from "../services/db/firebaseInit";
-import { BlockType } from "../react-setup/src/types/block";
+import { BlockType } from "../types/block";
 
 const router = Router();
 

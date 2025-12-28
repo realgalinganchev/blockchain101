@@ -1,5 +1,5 @@
 import { db } from "../firebaseInit";
-import { EthereumTransaction } from "../../../react-setup/src/types/block";
+import { EthereumTransaction } from "../../../types/block";
 
 export async function getTransactionsFromMempool(): Promise<
   EthereumTransaction[]

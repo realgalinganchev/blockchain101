@@ -9,6 +9,10 @@ import { addTransactionToMempool, getTransactionsFromMempool, removeTransactionF
 
 const blockchain = Blockchain.instance;
 let mempool: EthereumTransaction[] = [];
+let currentDifficulty = 4; // Number of leading zeros required
+let miningProgressListeners: Array<(hash: string, nonce: number) => void> = [];
+let currentMiningState = { hash: "", nonce: 0, isMining: false };
+let shouldAbortMining = false;
 
 export async function initializeMempool() {
   mempool = await getTransactionsFromMempool();
@@ -34,8 +38,11 @@ export async function addTransaction(transaction: EthereumTransaction) {
   await addTransactionToMempool(transaction);
 }
 
-export async function mineBlock(): Promise<BlockType> {
+export async function mineBlock(): Promise<BlockType & { miningTime: number }> {
   try {
+    currentMiningState.isMining = true;
+    shouldAbortMining = false;
+    const startTime = Date.now();
     const previousHash = blockchain.getLatestBlock().hash;
     const blockNumber = blockchain.getLatestBlock().number + 1;
     let selectedTransactions: EthereumTransaction[] = getSelectedTransactions(
@@ -44,14 +51,42 @@ export async function mineBlock(): Promise<BlockType> {
     );
     selectedTransactions = prepareTransactionsForBlock(selectedTransactions);
     let block = createNewBlock(selectedTransactions, previousHash, blockNumber);
-    calculateProofOfWork(block);
+
+    // Calculate proof of work with progress callback
+    try {
+      await calculateProofOfWork(block, currentDifficulty, (hash, nonce) => {
+        currentMiningState.hash = hash;
+        currentMiningState.nonce = nonce;
+        miningProgressListeners.forEach(listener => listener(hash, nonce));
+      }, () => shouldAbortMining);
+    } catch (error: any) {
+      if (error.message === "Mining aborted") {
+        console.log("Mining was aborted, cleaning up...");
+        currentMiningState.isMining = false;
+        currentMiningState.hash = "";
+        currentMiningState.nonce = 0;
+        shouldAbortMining = false;
+        throw error; // Re-throw so the route handler knows mining was aborted
+      }
+      throw error;
+    }
+
     blockchain.addBlock(block);
 
     await saveBlockToDatabase(block);
     await removeTransactionsFromMempool(selectedTransactions);
 
-    return block;
+    const miningTime = Date.now() - startTime;
+    currentMiningState.isMining = false;
+    currentMiningState.hash = "";
+    currentMiningState.nonce = 0;
+    shouldAbortMining = false;
+    return { ...block, miningTime };
   } catch (error) {
+    currentMiningState.isMining = false;
+    currentMiningState.hash = "";
+    currentMiningState.nonce = 0;
+    shouldAbortMining = false;
     throw error;
   }
 }
@@ -68,6 +103,33 @@ async function removeTransactionsFromMempool(
 
 async function saveBlockToDatabase(block: BlockType) {
   await saveBlock(block);
+}
+
+export function setDifficulty(difficulty: number) {
+  currentDifficulty = difficulty;
+}
+
+export function getDifficulty(): number {
+  return currentDifficulty;
+}
+
+export function addMiningProgressListener(listener: (hash: string, nonce: number) => void) {
+  miningProgressListeners.push(listener);
+}
+
+export function removeMiningProgressListener(listener: (hash: string, nonce: number) => void) {
+  miningProgressListeners = miningProgressListeners.filter(l => l !== listener);
+}
+
+export function getMiningState() {
+  return currentMiningState;
+}
+
+export function abortMining() {
+  shouldAbortMining = true;
+  currentMiningState.isMining = false;
+  currentMiningState.hash = "";
+  currentMiningState.nonce = 0;
 }
 
 export { mempool };

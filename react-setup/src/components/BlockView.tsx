@@ -17,7 +17,9 @@ const BlockView: React.FC<BlockViewProps> = ({
   const transactions = block.transactionsDetailed;
   return (
     <div className="block">
-      <h5 className="game-font">Block height:{index + 1}</h5>
+      <h5 className="game-font">
+        {index === 0 ? "Genesis Block" : `Block height:${index}`}
+      </h5>
       <p>Nonce: {parseInt(block.nonce, 16)}</p>
       <p>Hash: {formatHash(block.hash)}</p>
       <p>Data: {block.data}</p>

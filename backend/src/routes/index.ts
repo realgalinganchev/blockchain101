@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { addTransaction, mineBlock, mempool, getDifficulty, setDifficulty, addMiningProgressListener, removeMiningProgressListener, getMiningState, abortMining } from "../services/blockchain";
+import { addTransaction, mineBlock, mempool, getDifficulty, setDifficulty, addMiningProgressListener, removeMiningProgressListener, getMiningState, abortMining, clearMempool } from "../services/blockchain";
 import { db } from "../services/db/firebaseInit";
 import { BlockType } from "../types/block";
 
@@ -48,12 +48,25 @@ router.get("/mine", async (_req: Request, res: Response) => {
 
 router.delete("/blockchain", async (_req: Request, res: Response) => {
   try {
+    // Delete blockchain
     const blocksSnapshot = await db.collection("blockchain").get();
-    const batch = db.batch();
+    const blocksBatch = db.batch();
     blocksSnapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
+      blocksBatch.delete(doc.ref);
     });
-    await batch.commit();
+    await blocksBatch.commit();
+
+    // Delete mempool from Firebase
+    const mempoolSnapshot = await db.collection("mempool").get();
+    const mempoolBatch = db.batch();
+    mempoolSnapshot.docs.forEach((doc) => {
+      mempoolBatch.delete(doc.ref);
+    });
+    await mempoolBatch.commit();
+
+    // Clear in-memory mempool
+    clearMempool();
+
     res.sendStatus(200);
   } catch (error: any) {
     res.status(500).json({ error: error.toString() });

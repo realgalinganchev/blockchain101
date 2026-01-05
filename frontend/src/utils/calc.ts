@@ -31,9 +31,7 @@ export function hexStringToUint8Array(hexString: string) {
 }
 
 export function formatHash(hash: string): string {
-  // Remove 0x prefix to match Bitcoin style
-  const cleanHash = hash.replace('0x', '');
-  const formattedHash: string = `${cleanHash.slice(0, 6)}..${cleanHash.slice(-3)}`;
+  const formattedHash: string = `${hash.slice(0, 6)}..${hash.slice(-3)}`;
   return formattedHash;
 }
 

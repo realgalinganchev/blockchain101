@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import {  EthereumTransaction } from "../react-setup/src/types/block";
+import {  EthereumTransaction } from "../types/block";
 import { toHexString } from "./calc";
 
 export function getSelectedTransactions(

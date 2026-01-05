@@ -17,12 +17,7 @@ app.use(
   })
 );
 
-app.use(express.static("react-setup/public"));
 app.use("/", routes);
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "react-setup/public", "index.html"));
-});
 
 initializeBlockchain().then(() => {
   initializeMempool().then(() => {

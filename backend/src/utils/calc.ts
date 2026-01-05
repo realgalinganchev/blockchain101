@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import BlockClass from "../classes/Block";
 import { TARGET_DIFFICULTY } from "../constants/tx";
-import { BlockType, EthereumTransaction } from "../react-setup/src/types/block";
+import { BlockType, EthereumTransaction } from "../types/block";
 
 export function getTotalGasUsed(
   transactions: EthereumTransaction[]

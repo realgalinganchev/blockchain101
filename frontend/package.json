@@ -1,10 +1,11 @@
 {
-  "name": "react-setup",
+  "name": "blockchain101-frontend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Blockchain 101 Frontend",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon --exec \"webpack serve --mode development\"",
+    "start": "webpack serve --mode development --port 9000",
+    "dev": "nodemon --exec \"webpack serve --mode development --port 9000\"",
     "build": "webpack --mode production"
   },
   "keywords": [],
@@ -29,8 +30,10 @@
     "@types/react": "^18.2.17",
     "@types/react-dom": "^18.2.7",
     "babel-loader": "^9.1.3",
+    "css-loader": "^7.1.2",
     "html-webpack-plugin": "^5.5.3",
     "nodemon": "^3.0.1",
+    "style-loader": "^4.0.0",
     "typescript": "^5.1.6",
     "webpack": "^5.88.2",
     "webpack-cli": "^5.1.4",

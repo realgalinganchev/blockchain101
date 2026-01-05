@@ -1,5 +1,5 @@
 import { db } from "../firebaseInit";
-import { BlockType } from "../../../react-setup/src/types/block";
+import { BlockType } from "../../../types/block";
 
 export async function getBlocks(): Promise<BlockType[]> {
   const snapshot = await db.collection("blockchain").get();

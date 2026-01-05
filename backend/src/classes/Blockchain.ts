@@ -1,4 +1,4 @@
-import { BlockType } from "../react-setup/src/types/block";
+import { BlockType } from "../types/block";
 
 class Blockchain {
   chain: BlockType[];

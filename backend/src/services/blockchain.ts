@@ -2,7 +2,7 @@ import Blockchain from "../classes/Blockchain";
 import { MAX_TRANSACTIONS } from "../constants/tx";
 import { calculateProofOfWork } from "../utils/calc";
 import { getBlocks, saveBlock } from "./db/blockchain";
-import { BlockType, EthereumTransaction } from "../react-setup/src/types/block";
+import { BlockType, EthereumTransaction } from "../types/block";
 import { constructBlock, createGenesisBlock, createNewBlock } from "../utils/block";
 import { getSelectedTransactions, prepareTransactionsForBlock } from "../utils/transaction";
 import { addTransactionToMempool, getTransactionsFromMempool, removeTransactionFromMempool } from "./db/mempool";

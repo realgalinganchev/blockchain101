@@ -1,0 +1,8 @@
+{
+  "backendUrl": "http://localhost:9001",
+  "defaults": {
+    "transactions": 10,
+    "blocks": 5,
+    "difficulty": 2
+  }
+}

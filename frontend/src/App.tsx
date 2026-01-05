@@ -160,6 +160,7 @@ const App = () => {
         method: "DELETE",
       });
       setBlocks([]);
+      setMempool([]);
     } catch (error) {
       console.error("Error deleting blockchain:", error);
     } finally {

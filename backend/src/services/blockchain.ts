@@ -132,4 +132,8 @@ export function abortMining() {
   currentMiningState.nonce = 0;
 }
 
+export function clearMempool() {
+  mempool.length = 0;
+}
+
 export { mempool };

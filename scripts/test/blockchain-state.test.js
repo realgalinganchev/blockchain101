@@ -64,7 +64,7 @@ async function testBlockchainState() {
     // Test 2: Blockchain exists and has blocks
     console.log(chalk.blue('\nTest Suite: Blockchain Structure'));
     assertGreaterThan(blocks.length, 0, 'Blockchain has at least 1 block (genesis)');
-    assertGreaterThan(blocks.length, 1, 'Blockchain has more than genesis block');
+    assertGreaterThan(blocks.length, 1, `Blockchain has mined blocks (${blocks.length} total)`);
 
     // Test 3: Genesis block validation
     console.log(chalk.blue('\nTest Suite: Genesis Block'));
@@ -72,10 +72,8 @@ async function testBlockchainState() {
       // Sort blocks by timestamp to ensure genesis is first
       blocks.sort((a, b) => a.timestamp - b.timestamp);
       const genesis = blocks[0];
-      assert(
-        genesis.previousHash === '0' || genesis.previousHash === '0x0' || genesis.previousHash === '',
-        'Genesis block has correct previousHash (0, 0x0, or empty)'
-      );
+
+      assertEqual(genesis.previousHash, '0', 'Genesis block previousHash is "0"');
       assert(genesis.hash && genesis.hash.length > 0, 'Genesis block has valid hash');
       assert(genesis.timestamp > 0, 'Genesis block has valid timestamp');
     }

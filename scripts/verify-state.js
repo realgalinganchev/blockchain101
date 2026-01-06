@@ -43,6 +43,9 @@ async function verifyState() {
     const blockchainResponse = await axios.get(`${backendUrl}/blockchain`);
     const blocks = blockchainResponse.data;
 
+    // Sort blocks by timestamp to ensure correct order
+    blocks.sort((a, b) => a.timestamp - b.timestamp);
+
     console.log(chalk.blue('📊 Blockchain Statistics:'));
     console.log(chalk.white(`  Total blocks: ${blocks.length}`));
 

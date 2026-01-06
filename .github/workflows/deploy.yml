@@ -56,6 +56,11 @@ jobs:
           cd scripts
           npm install
 
+      - name: Clear existing blockchain data
+        run: |
+          echo "Clearing any existing blockchain data..."
+          curl -X DELETE http://localhost:9001/blockchain || true
+
       - name: Populate devnet with pre-mined blockchain
         run: |
           cd scripts
@@ -91,6 +96,22 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/blockchain101-frontend:pre-mined-${{ github.sha }}
           cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/blockchain101-frontend:latest
           cache-to: type=inline
+
+      - name: Test pre-mined images
+        run: |
+          echo "Starting pre-mined images for testing..."
+          docker compose up -d
+
+          echo "Waiting for services to be ready..."
+          sleep 10
+
+          echo "Running tests against pre-mined blockchain..."
+          cd scripts
+          npm test
+
+          echo "Tests passed! Stopping containers..."
+          cd ..
+          docker compose down
 
       - name: Output summary
         run: |

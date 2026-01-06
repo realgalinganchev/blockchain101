@@ -60,6 +60,11 @@ jobs:
         run: |
           echo "Clearing any existing blockchain data..."
           curl -X DELETE http://localhost:9001/blockchain || true
+          echo "Restarting backend to reinitialize genesis block..."
+          docker compose restart backend
+          sleep 5
+          echo "Waiting for backend to be ready..."
+          timeout 30 bash -c 'until curl -f http://localhost:9001/blockchain; do sleep 2; done'
 
       - name: Populate devnet with pre-mined blockchain
         run: |

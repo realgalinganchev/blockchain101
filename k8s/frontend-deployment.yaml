@@ -26,6 +26,8 @@ spec:
         env:
         - name: BACKEND_HOST
           value: "blockchain101-backend.blockchain101.svc.cluster.local"
+        - name: BACKEND_RESOLVER
+          value: "kube-dns.kube-system.svc.cluster.local"
         ports:
         - containerPort: 80
           name: http

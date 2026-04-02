@@ -28,4 +28,4 @@ COPY nginx.conf /etc/nginx/templates/default.conf.template
 EXPOSE 80
 
 # envsubst replaces $BACKEND_HOST at runtime, then starts nginx
-CMD ["/bin/sh", "-c", "envsubst '${BACKEND_HOST}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "envsubst '${BACKEND_HOST} ${BACKEND_RESOLVER}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]

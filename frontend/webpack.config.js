@@ -42,7 +42,7 @@ module.exports = {
     }),
     new webpack.DefinePlugin({
       "process.env.BACKEND_API_URL": JSON.stringify(
-        "http://localhost:9001"
+        process.env.BACKEND_API_URL || "http://localhost:9001"
       ),
     }),
   ],

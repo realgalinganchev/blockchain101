@@ -35,3 +35,10 @@ build/
 
 # Local
 local
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfstate.*.backup
+terraform/terraform.tfvars

@@ -1,8 +1,8 @@
-# Terraform - Civo Kubernetes Deployment
+# Terraform - DigitalOcean Kubernetes Deployment
 
-Deploys blockchain101 to **Civo** Kubernetes.
+Deploys blockchain101 to **DigitalOcean Kubernetes Service (DOKS)**.
 
-Chosen for its simplicity and **$250 free credit** — enough to run the cluster for weeks at no cost.
+Default config: 1x `s-1vcpu-2gb` node (~$12/mo), region `fra1` (Frankfurt).
 
 ---
 
@@ -10,14 +10,15 @@ Chosen for its simplicity and **$250 free credit** — enough to run the cluster
 
 1. [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.0
 2. [kubectl](https://kubernetes.io/docs/tasks/tools/)
-3. A [Civo account](https://dashboard.civo.com/signup) (free $250 credit on signup)
+3. [doctl](https://docs.digitalocean.com/reference/doctl/how-to/install/) (DigitalOcean CLI)
+4. A [DigitalOcean account](https://cloud.digitalocean.com/registrations/new) with a Personal Access Token
 
 ---
 
-## Civo Setup
+## DigitalOcean Setup
 
-1. Sign up at [dashboard.civo.com](https://dashboard.civo.com/signup)
-2. Go to **Security** → copy your **API key**
+1. Sign up at [cloud.digitalocean.com](https://cloud.digitalocean.com)
+2. Go to **API** → **Personal access tokens** → generate a token with read/write scope
 
 ---
 
@@ -26,7 +27,7 @@ Chosen for its simplicity and **$250 free credit** — enough to run the cluster
 ### 1. Configure variables
 ```bash
 cp terraform.tfvars.example terraform.tfvars
-# Set civo_token to your Civo API key
+# Set do_token to your DigitalOcean personal access token
 ```
 
 ### 2. Set Firebase secrets via environment (don't commit them)
@@ -46,8 +47,8 @@ terraform plan
 terraform apply
 ```
 
-This creates (~2-3 min):
-- Civo Kubernetes cluster (1x `g4s.kube.small` node)
+This creates (~3-5 min):
+- DigitalOcean Kubernetes cluster (1x `s-1vcpu-2gb` node)
 - `blockchain101` namespace
 - Firebase credentials as a Kubernetes Secret
 
@@ -86,7 +87,7 @@ terraform destroy
 
 | Resource | Size | Cost |
 |---|---|---|
-| Kubernetes cluster | 1x g4s.kube.small (1CPU/2GB) | ~$5/mo |
-| Load Balancers (2x) | — | Included |
+| Kubernetes cluster | 1x s-1vcpu-2gb (1CPU/2GB) | ~$12/mo |
+| Load Balancers (2x) | — | ~$12/mo each |
 
-**$250 free credit covers ~50 months** of this cluster. Destroy when not in use.
+Destroy when not in use to avoid charges.

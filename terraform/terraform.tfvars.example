@@ -1,10 +1,10 @@
-# Civo API token — get it from https://dashboard.civo.com/security
-civo_token = "your-civo-api-token"
+# DigitalOcean API token — get it from https://cloud.digitalocean.com/account/api/tokens
+do_token = "your-digitalocean-api-token"
 
 # Cluster
-region       = "FRA1"  # LON1, NYC1, FRA1, PHX1
+region       = "fra1"        # nyc1, sfo3, fra1, sgp1, etc.
 cluster_name = "blockchain101-cluster"
-node_size    = "g4s.kube.small"  # 1 CPU, 2GB RAM — ~$5/mo (covered by $250 free credit)
+node_size    = "s-1vcpu-2gb" # 1 CPU, 2GB RAM — ~$12/mo
 node_count   = 1
 
 # Firebase Credentials (use TF_VAR_ env vars instead of committing these)

@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blockchain101-backend
+  namespace: blockchain101
+  labels:
+    app: blockchain101-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blockchain101-backend
+  template:
+    metadata:
+      labels:
+        app: blockchain101-backend
+    spec:
+      containers:
+      - name: backend
+        image: galinganchev/blockchain101-backend:latest
+        ports:
+        - containerPort: 9001
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: FIREBASE_TYPE
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_TYPE
+        - name: FIREBASE_PROJECT_ID
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_PROJECT_ID
+        - name: FIREBASE_PRIVATE_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_PRIVATE_KEY_ID
+        - name: FIREBASE_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_PRIVATE_KEY
+        - name: FIREBASE_CLIENT_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_CLIENT_EMAIL
+        - name: FIREBASE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_CLIENT_ID
+        - name: FIREBASE_AUTH_URI
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_AUTH_URI
+        - name: FIREBASE_TOKEN_URI
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_TOKEN_URI
+        - name: FIREBASE_AUTH_PROVIDER_CERT_URL
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_AUTH_PROVIDER_CERT_URL
+        - name: FIREBASE_CLIENT_CERT_URL
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_CLIENT_CERT_URL
+        - name: FIREBASE_UNIVERSE_DOMAIN
+          valueFrom:
+            secretKeyRef:
+              name: firebase-credentials
+              key: FIREBASE_UNIVERSE_DOMAIN
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /mempool
+            port: 9001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /mempool
+            port: 9001
+          initialDelaySeconds: 10
+          periodSeconds: 5

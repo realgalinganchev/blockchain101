@@ -12,10 +12,6 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Backend API URL (passed at build time)
-ARG BACKEND_API_URL=http://localhost:9001
-ENV BACKEND_API_URL=$BACKEND_API_URL
-
 # Build the application
 RUN npm run build
 

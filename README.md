@@ -90,13 +90,33 @@ blockchain101/
 │   ├── public/             # Static assets
 │   ├── dist/               # Webpack build output
 │   ├── Dockerfile          # Frontend container definition
-│   ├── nginx.conf          # Nginx configuration
+│   ├── nginx.conf          # Nginx reverse proxy config (envsubst template)
 │   ├── .dockerignore
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── webpack.config.js
 │
-└── docker-compose.yml      # Multi-container orchestration
+├── k8s/                     # Kubernetes manifests
+│   ├── namespace.yaml
+│   ├── backend-deployment.yaml
+│   ├── backend-service.yaml
+│   ├── frontend-deployment.yaml
+│   └── frontend-service.yaml
+│
+├── terraform/               # Infrastructure as Code (DigitalOcean)
+│   ├── provider.tf
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── terraform.tfvars.example
+│
+├── scripts/                 # Devnet automation scripts
+│   ├── populate-devnet.js
+│   ├── verify-state.js
+│   └── package.json
+│
+├── run.sh                   # Interactive playground CLI
+└── docker-compose.yml       # Multi-container orchestration
 ```
 
 ## 🚀 Getting Started
@@ -154,7 +174,7 @@ blockchain101/
 
 1. **Build and run with Docker Compose**
    ```bash
-   docker-compose up --build
+   docker compose up --build -d
    ```
 
 2. **Access the application**
@@ -163,8 +183,13 @@ blockchain101/
 
 3. **Stop the containers**
    ```bash
-   docker-compose down
+   docker compose down
    ```
+
+Or use the interactive playground:
+```bash
+./run.sh   # then choose 1 → 2 (Rebuild + start)
+```
 
 ## 🔨 Build Process
 
@@ -206,12 +231,13 @@ blockchain101/
 2. Nginx (frontend container) serves `index.html` + `bundle.js`
 3. React app loads in browser
 4. User clicks "Add Transaction"
-5. React sends `POST http://localhost:9001/transaction`
-6. Express backend receives request
-7. Backend saves to Firebase
-8. Backend returns JSON response
-9. React updates UI
-10. SSE connection streams real-time mining progress
+5. React sends `POST /api/transaction` (relative URL)
+6. Nginx reverse-proxies `/api/*` → `http://backend:9001/*`
+7. Express backend receives request
+8. Backend saves to Firebase
+9. Backend returns JSON response
+10. React updates UI
+11. SSE connection streams real-time mining progress
 
 ## 📦 Docker Images
 
@@ -303,6 +329,28 @@ cd frontend
 npm start            # Start webpack dev server (port 9000)
 npm run build        # Build for production
 ```
+
+## 🎮 Interactive Playground (`run.sh`)
+
+A single interactive CLI to run everything:
+
+```bash
+./run.sh
+```
+
+```
+⛓️  blockchain101 Playground
+  1) Docker    — local devnet (build/start/stop/logs)
+  2) Scripts   — populate / verify / test
+  3) Terraform — infrastructure
+  4) Kubernetes — deploy / manage
+  5) App       — open / status
+  0) Exit
+```
+
+Each submenu has numbered options — no need to remember commands.
+
+---
 
 ## ⚙️ CI/CD Workflows
 
@@ -400,8 +448,8 @@ Edit `scripts/config.json` to customize defaults:
 
 ### Full workflow example
 ```bash
-# 1. Start devnet
-docker compose up -d
+# 1. Start devnet (rebuild to pick up any image changes)
+docker compose up --build -d
 
 # 2. Wait for backend to be ready
 curl http://localhost:9001/blockchain

@@ -35,15 +35,17 @@ menu_docker() {
   while true; do
     header "🐳  Docker"
     echo "  1) Start local devnet"
-    echo "  2) Stop local devnet"
-    echo "  3) Tail logs"
+    echo "  2) Rebuild + start local devnet"
+    echo "  3) Stop local devnet"
+    echo "  4) Tail logs"
     echo "  0) Back"
     echo ""
     read -rp "Choose: " opt
     case $opt in
       1) run docker compose up -d; pause ;;
-      2) run docker compose down; pause ;;
-      3) docker compose logs -f ;;
+      2) run docker compose up --build -d; pause ;;
+      3) run docker compose down; pause ;;
+      4) docker compose logs -f ;;
       0) break ;;
       *) red "Invalid option" ;;
     esac
@@ -150,7 +152,7 @@ menu_app() {
 
 while true; do
   header "⛓️   blockchain101 Playground"
-  echo "  1) Docker   — local devnet"
+  echo "  1) Docker   — local devnet (build/start/stop/logs)"
   echo "  2) Scripts  — populate / verify / test"
   echo "  3) Terraform — infrastructure"
   echo "  4) Kubernetes — deploy / manage"

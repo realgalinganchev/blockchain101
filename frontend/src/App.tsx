@@ -8,7 +8,7 @@ import { BlockType, EthereumTransaction } from "./types/block";
 
 const BUTTON_CLICK_SOUND = new Audio("/addSound.mp3");
 const MINE_BUTTON_SOUND = new Audio("/mineSound.mp3");
-const API_URL = process.env.BACKEND_API_URL;
+const API_URL = process.env.BACKEND_API_URL || "/api";
 
 const App = () => {
   const [isLoadingTx, setIsLoadingTx] = useState(false);

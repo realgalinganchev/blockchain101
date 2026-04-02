@@ -2,6 +2,8 @@
 
 An educational blockchain application demonstrating proof-of-work mining, transactions, and real-time updates using Server-Sent Events (SSE).
 
+This project models the core mechanics of **Ethereum's Proof-of-Work consensus** (pre-Merge, pre-EIP-3675). It uses the same cryptographic primitives — **Keccak-256** hashing and **RLP encoding** — the same nonce-based mining loop, and a block structure mirroring Ethereum's (`nonce`, `previousHash`, `gasLimit`, `gasUsed`, `miner`, `timestamp`, `transactions`). Difficulty is represented as a leading-zero target on the hash, analogous to Ethereum's target threshold. The chain omits Ethash's DAG/epoch complexity and the P2P network layer, keeping the focus on the fundamental PoW mechanics.
+
 ## 🏗️ Architecture
 
 ```
@@ -236,7 +238,9 @@ blockchain101/
 - **Language**: TypeScript
 - **Build Tool**: Webpack
 - **Key Libraries**:
-  - `ethers.js` - Ethereum utilities
+  - `ethers.js` - Ethereum utilities (Keccak-256, RLP encoding)
+  - `elliptic` - Transaction signing (ECDSA / secp256k1)
+  - `crypto-js` - Cryptographic functions
   - `react-dom` - React rendering
 
 ### DevOps
@@ -244,8 +248,8 @@ blockchain101/
 - **Orchestration**: Docker Compose
 - **Web Server**: Nginx (for frontend)
 - **CI/CD**: GitHub Actions
-- **IaC**: Terraform (OCI)
-- **Kubernetes**: OKE (Oracle Container Engine)
+- **IaC**: Terraform (DigitalOcean)
+- **Kubernetes**: DOKS (DigitalOcean Kubernetes Service)
 
 ## 🎯 Features
 
@@ -415,17 +419,17 @@ npm test
 
 ---
 
-## ☸️ Kubernetes Deployment (OCI)
+## ☸️ Kubernetes Deployment (DigitalOcean)
 
-The app deploys to **Oracle Kubernetes Engine (OKE)** using the free tier (2x `VM.Standard.E2.1.Micro` nodes — always free).
+The app deploys to **DigitalOcean Kubernetes Service (DOKS)**. Default config: 1 node, `s-1vcpu-2gb` size (~$12/mo), region `fra1` (Frankfurt).
 
 ### Infrastructure (via Terraform)
 
 ```
 terraform/
-├── provider.tf       # OCI + Kubernetes provider config
+├── provider.tf       # DigitalOcean + Kubernetes provider config
 ├── variables.tf      # Input variables
-├── main.tf           # VCN, subnets, OKE cluster, node pool, k8s namespace + Firebase secret
+├── main.tf           # DOKS cluster, node pool, k8s namespace + Firebase secret
 ├── outputs.tf        # Cluster endpoint, kubeconfig command
 └── terraform.tfvars.example  # Template — copy to terraform.tfvars
 ```
@@ -434,7 +438,7 @@ terraform/
 ```bash
 cd terraform
 cp terraform.tfvars.example terraform.tfvars
-# Fill in OCI credentials in terraform.tfvars
+# Fill in your DigitalOcean API token (do_token) in terraform.tfvars
 
 # Set Firebase secrets as env vars (don't commit them)
 export TF_VAR_firebase_project_id="..."
@@ -542,11 +546,11 @@ docker compose down  # Stop all containers
 - Confirm the correct label (`CI:Build` or `CI:Deploy`) was added **before** merging
 - Check Actions tab for any error logs
 
-### Terraform / OCI issues
+### Terraform / DigitalOcean issues
 
-- Ensure OCI CLI is installed and configured: `oci iam user get --user-id <user_ocid>`
-- Verify API key fingerprint matches what's in OCI Console
-- See `terraform/README.md` for detailed OCI setup steps
+- Ensure `doctl` is installed and authenticated: `doctl account get`
+- Verify your `do_token` in `terraform.tfvars` is a valid DigitalOcean personal access token
+- See `terraform/README.md` for detailed setup steps
 
 ---
 

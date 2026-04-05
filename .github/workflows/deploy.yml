@@ -46,7 +46,7 @@ jobs:
             ];
             let out = 'BACKEND_API_URL=http://localhost:9001\n';
             for (const key of keys) {
-              const val = (process.env[key] || '').split('\n').join('\\\\n');
+              const val = (process.env[key] || '').split('\n').join('\\n');
               out += key + '=\"' + val + '\"\n';
             }
             fs.writeFileSync('backend/.env', out);

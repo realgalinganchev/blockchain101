@@ -24,33 +24,27 @@ jobs:
 
       - name: Create .env file for backend
         env:
-          FIREBASE_TYPE: ${{ secrets.FIREBASE_TYPE }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_PRIVATE_KEY_ID: ${{ secrets.FIREBASE_PRIVATE_KEY_ID }}
-          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
-          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
-          FIREBASE_CLIENT_ID: ${{ secrets.FIREBASE_CLIENT_ID }}
-          FIREBASE_AUTH_URI: ${{ secrets.FIREBASE_AUTH_URI }}
-          FIREBASE_TOKEN_URI: ${{ secrets.FIREBASE_TOKEN_URI }}
-          FIREBASE_AUTH_PROVIDER_CERT_URL: ${{ secrets.FIREBASE_AUTH_PROVIDER_CERT_URL }}
-          FIREBASE_CLIENT_CERT_URL: ${{ secrets.FIREBASE_CLIENT_CERT_URL }}
-          FIREBASE_UNIVERSE_DOMAIN: ${{ secrets.FIREBASE_UNIVERSE_DOMAIN }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: |
           node -e "
-            const fs = require('fs');
-            const keys = [
-              'FIREBASE_TYPE','FIREBASE_PROJECT_ID','FIREBASE_PRIVATE_KEY_ID',
-              'FIREBASE_PRIVATE_KEY','FIREBASE_CLIENT_EMAIL','FIREBASE_CLIENT_ID',
-              'FIREBASE_AUTH_URI','FIREBASE_TOKEN_URI','FIREBASE_AUTH_PROVIDER_CERT_URL',
-              'FIREBASE_CLIENT_CERT_URL','FIREBASE_UNIVERSE_DOMAIN'
+            const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+            const key = sa.private_key.split('\n').join('\\n');
+            const lines = [
+              'BACKEND_API_URL=http://localhost:9001',
+              'FIREBASE_TYPE=' + sa.type,
+              'FIREBASE_PROJECT_ID=' + sa.project_id,
+              'FIREBASE_PRIVATE_KEY_ID=' + sa.private_key_id,
+              'FIREBASE_PRIVATE_KEY=\"' + key + '\"',
+              'FIREBASE_CLIENT_EMAIL=' + sa.client_email,
+              'FIREBASE_CLIENT_ID=' + sa.client_id,
+              'FIREBASE_AUTH_URI=' + sa.auth_uri,
+              'FIREBASE_TOKEN_URI=' + sa.token_uri,
+              'FIREBASE_AUTH_PROVIDER_CERT_URL=' + sa.auth_provider_x509_cert_url,
+              'FIREBASE_CLIENT_CERT_URL=' + sa.client_x509_cert_url,
+              'FIREBASE_UNIVERSE_DOMAIN=' + (sa.universe_domain || 'googleapis.com'),
             ];
-            let out = 'BACKEND_API_URL=http://localhost:9001\n';
-            for (const key of keys) {
-              const val = (process.env[key] || '').split('\n').join('\\n');
-              out += key + '=\"' + val + '\"\n';
-            }
-            fs.writeFileSync('backend/.env', out);
-            console.log('backend/.env written:', out.split('\n').length - 1, 'lines');
+            require('fs').writeFileSync('backend/.env', lines.join('\n') + '\n');
+            console.log('backend/.env written:', lines.length, 'lines');
           "
           echo "Variable count: $(grep -c '=' backend/.env)"
 

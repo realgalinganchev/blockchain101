@@ -608,6 +608,321 @@ docker compose down  # Stop all containers
 
 ---
 
+---
+
+## 🔬 DevOps Deep-Dive
+
+How each DevOps layer works, with visual diagrams.
+
+### Docker — Local Development
+
+Both images use multi-stage builds to keep the final image small.
+
+**Frontend** (`frontend/Dockerfile`):
+```
+Stage 1 — builder (node:18-alpine)          Stage 2 — runtime (nginx:alpine)
+┌─────────────────────────────────┐          ┌──────────────────────────────┐
+│  npm ci                         │          │                              │
+│  COPY src/                      │  COPY    │  /usr/share/nginx/html/      │
+│  npm run build  ──────────────► │ ──────►  │    index.html                │
+│                   /app/dist/    │          │    bundle.js                 │
+│                                 │          │    assets/                   │
+│  (node_modules discarded)       │          │                              │
+└─────────────────────────────────┘          │  nginx.conf (template)       │
+                                             │  → envsubst at runtime       │
+                                             │  → /etc/nginx/conf.d/        │
+                                             └──────────────────────────────┘
+Final image: ~25 MB (no Node.js, no source code)
+```
+
+**Backend** (`backend/Dockerfile`):
+```
+Stage 1 — builder (node:18-alpine)          Stage 2 — runtime (node:18-alpine)
+┌─────────────────────────────────┐          ┌──────────────────────────────┐
+│  npm ci                         │          │                              │
+│  COPY src/                      │  COPY    │  /app/dist/   (JS only)      │
+│  tsc  ──────────────────────►   │ ──────►  │  /app/node_modules/          │
+│          /app/dist/             │          │                              │
+│                                 │          │  node dist/server.js         │
+└─────────────────────────────────┘          └──────────────────────────────┘
+Final image: ~150 MB
+```
+
+**nginx reverse proxy**
+
+The frontend container serves the React app AND proxies `/api/*` calls to the backend. The browser only ever talks to one origin — no CORS issues.
+
+```
+Browser                    Frontend Container (nginx)         Backend Container (Node.js)
+   │                              │                                    │
+   │  GET /                       │                                    │
+   │ ─────────────────────────►   │                                    │
+   │  ◄─────────────────────────  │                                    │
+   │  index.html + bundle.js      │                                    │
+   │                              │                                    │
+   │  POST /api/transaction       │                                    │
+   │ ─────────────────────────►   │                                    │
+   │                              │  rewrite /api/transaction          │
+   │                              │       → /transaction               │
+   │                              │  POST http://backend:9001/         │
+   │                              │  transaction                       │
+   │                              │ ─────────────────────────────────► │
+   │                              │  ◄───────────────────────────────  │
+   │  ◄─────────────────────────  │  200 OK { txHash: "0x..." }        │
+   │  200 OK { txHash: "0x..." }  │                                    │
+```
+
+The nginx config uses `envsubst` so the backend hostname is injected at container startup — no rebuild needed:
+
+```
+nginx.conf.template                          nginx.conf (generated at startup)
+─────────────────────────────────            ─────────────────────────────────
+resolver ${BACKEND_RESOLVER} ...    ──►      resolver 127.0.0.11 ...
+set $upstream http://${BACKEND_HOST}:9001    set $upstream http://backend:9001
+```
+
+**docker-compose network**
+
+```
+┌────────────────────────── blockchain-network (bridge) ───────────────────────────┐
+│                                                                                   │
+│   ┌─────────────────────────────┐         ┌────────────────────────────────┐      │
+│   │  blockchain101-frontend     │         │  blockchain101-backend         │      │
+│   │                             │         │                                │      │
+│   │  BACKEND_HOST=backend       │         │  PORT=9001                     │      │
+│   │  BACKEND_RESOLVER=127.0.0.11│         │  Firebase credentials via .env │      │
+│   │                             │         │                                │      │
+│   │  :80 (internal)             │         │  :9001 (internal)              │      │
+│   └──────────────┬──────────────┘         └────────────────────────────────┘      │
+│                  │                                       ▲                         │
+│          port mapping                         DNS name "backend"                  │
+│          9000:80                              resolves inside network              │
+└──────────────────┼────────────────────────────────────────────────────────────────┘
+                   │
+           HOST MACHINE
+           localhost:9000 ── browser access
+           localhost:9001 ── direct API access
+```
+
+---
+
+### CI:Build — How it works
+
+A PR must be **merged** AND have the `CI:Build` label attached before merging.
+
+```
+Developer                  GitHub                     GitHub Actions Runner
+    │                         │                               │
+    │  git push               │                               │
+    │ ──────────────────────► │                               │
+    │  open PR                │                               │
+    │ ──────────────────────► │                               │
+    │  add label "CI:Build"   │                               │
+    │ ──────────────────────► │                               │
+    │  click Merge            │                               │
+    │ ──────────────────────► │  pull_request (closed+merged) │
+    │                         │  + label = CI:Build           │
+    │                         │ ────────────────────────────► │
+    │                         │                               │  checkout code
+    │                         │                               │  docker buildx setup
+    │                         │                               │  docker login
+    │                         │                               │  build backend image
+    │                         │                               │  push to Docker Hub
+    │                         │                               │  build frontend image
+    │                         │                               │  push to Docker Hub
+    │  ◄─────────────────────────────────────────────────────  │
+    │  workflow complete                                        │
+```
+
+Each merge produces two tags per image:
+```
+galinganchev/blockchain101-backend
+├── :latest          ← always points to most recent main branch build
+└── :main-<sha>      ← immutable, points to exact commit
+
+galinganchev/blockchain101-frontend
+├── :latest
+└── :main-<sha>
+```
+
+The workflow uses GitHub Actions layer cache (`type=gha`) — unchanged layers (e.g. `npm ci` when `package.json` didn't change) are never rebuilt.
+
+---
+
+### CI:Deploy — How it works
+
+Produces a `:pre-mined` image — built and tested against a Firebase instance populated with 5 blocks and 10 transactions.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        CI:Deploy Pipeline                                   │
+│                                                                             │
+│  ① Checkout + Docker login                                                  │
+│  ② Write Firebase credentials → backend/.env  (from GitHub Secrets)         │
+│  ③ docker compose up -d  (start devnet)                                     │
+│  ④ Health check: poll GET /blockchain until 200                              │
+│  ⑤ DELETE /blockchain  →  restart backend  (fresh genesis block)            │
+│  ⑥ scripts/populate-devnet.js  →  10 transactions + mine 5 blocks           │
+│  ⑦ scripts/verify-state.js  (assert chain integrity)                        │
+│  ⑧ docker compose down                                                      │
+│  ⑨ Build & push  :pre-mined  and  :pre-mined-<sha>  to Docker Hub           │
+│  ⑩ Start pre-mined images → run npm test → docker compose down              │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+> The blockchain data lives in Firebase (external DB), not baked into the image. `:pre-mined` means "built and verified against a known-good populated blockchain state."
+
+---
+
+### Terraform — Infrastructure as Code
+
+One `terraform apply` creates everything needed to run in the cloud:
+
+```
+terraform apply
+     │
+     ├──► DigitalOcean Kubernetes Cluster  (DOKS)
+     │       region: fra1 (Frankfurt)
+     │       version: 1.32.x
+     │       node pool: 1 × s-1vcpu-2gb (~$12/mo)
+     │
+     ├──► Kubernetes Namespace  "blockchain101"
+     │
+     └──► Kubernetes Secret  "firebase-credentials"
+              all 11 FIREBASE_* fields
+```
+
+Terraform uses two providers chained together — the Kubernetes provider is bootstrapped from the cluster output, so no manual kubeconfig step is needed during provisioning:
+
+```
+DigitalOcean provider  →  creates cluster  →  Kubernetes provider reads:
+                                                 .endpoint
+                                                 .kube_config[0].token
+                                                 .kube_config[0].cluster_ca_certificate
+```
+
+Firebase secrets are passed as `TF_VAR_*` environment variables — never written to `terraform.tfvars` which could be accidentally committed.
+
+---
+
+### Kubernetes — Runtime Orchestration
+
+**Cluster layout**
+
+```
+DigitalOcean Cloud
+└── DOKS Cluster  (blockchain101-cluster, fra1)
+    └── Node Pool  (1 × s-1vcpu-2gb)
+        └── Node
+            └── Namespace: blockchain101
+                ├── Deployment: blockchain101-backend
+                │   └── Pod: Node.js Express  port 9001
+                │           env: FIREBASE_* (from Secret)
+                │
+                ├── Deployment: blockchain101-frontend
+                │   └── Pod: nginx + React app  port 80
+                │           env: BACKEND_HOST, BACKEND_RESOLVER
+                │
+                ├── Service: blockchain101-backend   (LoadBalancer :9001)
+                ├── Service: blockchain101-frontend  (LoadBalancer :80)
+                └── Secret:  firebase-credentials
+```
+
+**Pod-to-pod communication via Kubernetes DNS**
+
+Pods never talk by IP (IPs change on restart). They use DNS names:
+
+```
+  BACKEND_HOST     = "blockchain101-backend.blockchain101.svc.cluster.local"
+  BACKEND_RESOLVER = "kube-dns.kube-system.svc.cluster.local"
+
+  nginx  →  kube-dns resolves name  →  ClusterIP  →  Backend Service  →  Pod :9001
+```
+
+**Rolling update strategy** (`maxUnavailable: 1, maxSurge: 0`)
+
+```
+Before:  Pod A (old) — Running
+Step 1:  Pod A — Terminating   (brief unavailability — only 1 node, no room for surge)
+Step 2:  Pod B (new) — Running ✓
+```
+
+**Secret injection**
+
+```
+Secret "firebase-credentials"           Backend Pod
+┌──────────────────────────────┐        ┌──────────────────────────────┐
+│ FIREBASE_PROJECT_ID: base64  │        │ FIREBASE_PROJECT_ID=xxx      │
+│ FIREBASE_PRIVATE_KEY: base64 │ ──────►│ FIREBASE_PRIVATE_KEY=xxx     │
+│ ...                          │        │ ...                          │
+└──────────────────────────────┘        └──────────────────────────────┘
+  stored encrypted in etcd                available as env vars at runtime
+  never in source code
+```
+
+---
+
+### The Full Picture — Code to Production
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  SOURCE CODE  (GitHub)                                                           │
+│  branches / PRs / labels                                                         │
+└──────────────────────────────┬───────────────────────────────────────────────────┘
+                               │ merge with CI:Build label
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  CI/CD  (GitHub Actions)                                                         │
+│  build.yml  → builds Docker images                                               │
+│  deploy.yml → builds pre-mined images                                            │
+└──────────────────────────────┬───────────────────────────────────────────────────┘
+                               │ docker push
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  ARTIFACT REGISTRY  (Docker Hub)                                                 │
+│  galinganchev/blockchain101-backend:latest                                       │
+│  galinganchev/blockchain101-frontend:latest                                      │
+└──────────────────────────────┬───────────────────────────────────────────────────┘
+                               │ kubectl rollout restart → docker pull
+                               ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  INFRASTRUCTURE  (DigitalOcean — provisioned once by Terraform)                  │
+│                                                                                  │
+│  ┌────────────────────────────────────────────────────────────────────────────┐  │
+│  │  DOKS Cluster  fra1                                                        │  │
+│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
+│  │  │  Namespace: blockchain101                                            │  │  │
+│  │  │                                                                      │  │  │
+│  │  │  ┌─────────────────────────┐    ┌─────────────────────────────────┐  │  │  │
+│  │  │  │ frontend Deployment     │    │ backend Deployment              │  │  │  │
+│  │  │  │  Pod: nginx + React     │───►│  Pod: Node.js + Firebase        │  │  │  │
+│  │  │  └────────────┬────────────┘    └────────────────┬────────────────┘  │  │  │
+│  │  │  Service (LB) :80              Service (LB) :9001                     │  │  │
+│  │  └───────────────┼──────────────────────────────────┼───────────────────┘  │  │
+│  └──────────────────┼──────────────────────────────────┼──────────────────────┘  │
+└─────────────────────┼──────────────────────────────────┼──────────────────────────┘
+                      ▼                                  ▼
+              http://138.68.125.204              http://164.90.242.214:9001
+```
+
+**Local vs cloud at a glance**
+
+```
+                    LOCAL (docker compose)              CLOUD (k8s on DOKS)
+                    ──────────────────────              ───────────────────
+Image source        Built from source                  Pulled from Docker Hub
+BACKEND_HOST        backend  (Docker DNS)              blockchain101-backend
+                                                       .blockchain101.svc.cluster.local
+BACKEND_RESOLVER    127.0.0.11  (Docker DNS)           kube-dns.kube-system.svc.cluster.local
+Firebase creds      backend/.env file                  Kubernetes Secret
+Access              localhost:9000                     138.68.125.204:80
+Restart             docker compose restart             kubectl rollout restart
+Logs                docker compose logs -f             kubectl logs -f -l app=...
+```
+
+---
+
 ## 📄 License
 
 This project is for educational purposes.

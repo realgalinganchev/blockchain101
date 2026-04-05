@@ -36,60 +36,62 @@ jobs:
           FIREBASE_CLIENT_CERT_URL: ${{ secrets.FIREBASE_CLIENT_CERT_URL }}
           FIREBASE_UNIVERSE_DOMAIN: ${{ secrets.FIREBASE_UNIVERSE_DOMAIN }}
         run: |
-          python3 << 'PYEOF'
-          import os
-          keys = [
-            'FIREBASE_TYPE', 'FIREBASE_PROJECT_ID', 'FIREBASE_PRIVATE_KEY_ID',
-            'FIREBASE_PRIVATE_KEY', 'FIREBASE_CLIENT_EMAIL', 'FIREBASE_CLIENT_ID',
-            'FIREBASE_AUTH_URI', 'FIREBASE_TOKEN_URI', 'FIREBASE_AUTH_PROVIDER_CERT_URL',
-            'FIREBASE_CLIENT_CERT_URL', 'FIREBASE_UNIVERSE_DOMAIN'
-          ]
-          with open('backend/.env', 'w') as f:
-            f.write('BACKEND_API_URL=http://localhost:9001\n')
-            for key in keys:
-              val = os.environ.get(key, '')
-              val = val.replace('\n', '\\n')
-              f.write(f'{key}="{val}"\n')
-          print('backend/.env written successfully')
-          PYEOF
+          node -e "
+            const fs = require('fs');
+            const keys = [
+              'FIREBASE_TYPE','FIREBASE_PROJECT_ID','FIREBASE_PRIVATE_KEY_ID',
+              'FIREBASE_PRIVATE_KEY','FIREBASE_CLIENT_EMAIL','FIREBASE_CLIENT_ID',
+              'FIREBASE_AUTH_URI','FIREBASE_TOKEN_URI','FIREBASE_AUTH_PROVIDER_CERT_URL',
+              'FIREBASE_CLIENT_CERT_URL','FIREBASE_UNIVERSE_DOMAIN'
+            ];
+            let out = 'BACKEND_API_URL=http://localhost:9001\n';
+            for (const key of keys) {
+              const val = (process.env[key] || '').split('\n').join('\\\\n');
+              out += key + '=\"' + val + '\"\n';
+            }
+            fs.writeFileSync('backend/.env', out);
+            console.log('backend/.env written:', out.split('\n').length - 1, 'lines');
+          "
+          echo "Variable count: $(grep -c '=' backend/.env)"
 
-      - name: Start devnet with docker-compose
-        run: |
-          docker compose up -d
-          echo "Waiting for services to be ready..."
-          sleep 10
+      - name: Start devnet
+        run: docker compose up -d
 
       - name: Check devnet health
         run: |
-          echo "Checking backend health..."
-          timeout 60 bash -c 'until curl -f http://localhost:9001/blockchain; do sleep 2; done'
+          echo "Waiting for backend (up to 120s)..."
+          timeout 120 bash -c 'until curl -sf http://localhost:9001/blockchain > /dev/null; do
+            echo "  not ready, retrying in 3s..."
+            sleep 3
+          done'
           echo "Backend is ready!"
 
-      - name: Install script dependencies
+      - name: Show docker logs on failure
+        if: failure()
         run: |
-          cd scripts
-          npm install
+          echo "=== Container status ==="
+          docker compose ps
+          echo "=== Backend logs ==="
+          docker compose logs backend --tail=60
+          echo "=== .env keys (no values) ==="
+          cut -d= -f1 backend/.env
+
+      - name: Install script dependencies
+        run: cd scripts && npm install
 
       - name: Clear existing blockchain data
         run: |
-          echo "Clearing any existing blockchain data..."
-          curl -X DELETE http://localhost:9001/blockchain || true
-          echo "Restarting backend to reinitialize genesis block..."
+          curl -sf -X DELETE http://localhost:9001/blockchain || true
           docker compose restart backend
-          sleep 5
-          echo "Waiting for backend to be ready..."
-          timeout 30 bash -c 'until curl -f http://localhost:9001/blockchain; do sleep 2; done'
+          echo "Waiting for backend after restart (up to 60s)..."
+          timeout 60 bash -c 'until curl -sf http://localhost:9001/blockchain > /dev/null; do sleep 2; done'
+          echo "Backend ready!"
 
       - name: Populate devnet with pre-mined blockchain
-        run: |
-          cd scripts
-          npm run populate
-          echo "Blockchain populated successfully!"
+        run: cd scripts && npm run populate
 
       - name: Verify blockchain state
-        run: |
-          cd scripts
-          npm run verify
+        run: cd scripts && npm run verify
 
       - name: Stop devnet
         run: docker compose down
@@ -118,19 +120,11 @@ jobs:
 
       - name: Test pre-mined images
         run: |
-          echo "Starting pre-mined images for testing..."
           docker compose up -d
-
-          echo "Waiting for services to be ready..."
-          sleep 10
-
-          echo "Running tests against pre-mined blockchain..."
-          cd scripts
-          npm test
-
-          echo "Tests passed! Stopping containers..."
-          cd ..
-          docker compose down
+          echo "Waiting for backend (up to 120s)..."
+          timeout 120 bash -c 'until curl -sf http://localhost:9001/blockchain > /dev/null; do sleep 3; done'
+          cd scripts && npm test
+          cd .. && docker compose down
 
       - name: Output summary
         run: |
@@ -139,9 +133,3 @@ jobs:
           echo "### Images pushed to Docker Hub:" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ secrets.DOCKER_USERNAME }}/blockchain101-backend:pre-mined\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ secrets.DOCKER_USERNAME }}/blockchain101-frontend:pre-mined\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### To run the pre-mined blockchain:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "docker run -p 9001:9001 ${{ secrets.DOCKER_USERNAME }}/blockchain101-backend:pre-mined" >> $GITHUB_STEP_SUMMARY
-          echo "docker run -p 9000:80 ${{ secrets.DOCKER_USERNAME }}/blockchain101-frontend:pre-mined" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

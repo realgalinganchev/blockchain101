@@ -141,7 +141,7 @@ menu_app() {
     case $opt in
       1) open $FRONTEND_URL; pause ;;
       2) open $BACKEND_URL/blockchain; pause ;;
-      3) curl -s $BACKEND_URL/blockchain | python3 -m json.tool | head -30; pause ;;
+      3) curl -s --max-time 10 $BACKEND_URL/blockchain | python3 -m json.tool | head -30; pause ;;
       0) break ;;
       *) red "Invalid option" ;;
     esac

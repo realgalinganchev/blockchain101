@@ -97,7 +97,6 @@ blockchain101/
 │   └── webpack.config.js
 │
 ├── k8s/                     # Kubernetes manifests
-│   ├── namespace.yaml
 │   ├── backend-deployment.yaml
 │   ├── backend-service.yaml
 │   ├── frontend-deployment.yaml
@@ -386,7 +385,7 @@ Two GitHub Actions workflows automate the build and deployment pipeline. Both ar
 **What it does**:
 1. Starts the devnet using Docker Compose
 2. Clears any existing blockchain state
-3. Runs `scripts/populate-devnet.js` — mines 5 blocks with 10 transactions
+3. Runs `scripts/populate-devnet.js` — submits 8 transactions and mines 3 blocks at difficulty 2
 4. Verifies blockchain state with `scripts/verify-state.js`
 5. Builds new Docker images tagged `pre-mined` and `pre-mined-<sha>`
 6. Starts the pre-mined images and runs the full test suite
@@ -395,17 +394,7 @@ Two GitHub Actions workflows automate the build and deployment pipeline. Both ar
 **Required GitHub Secrets** (in addition to Docker secrets above):
 | Secret | Description |
 |---|---|
-| `FIREBASE_TYPE` | `service_account` |
-| `FIREBASE_PROJECT_ID` | Firebase project ID |
-| `FIREBASE_PRIVATE_KEY_ID` | Firebase private key ID |
-| `FIREBASE_PRIVATE_KEY` | Firebase private key (full PEM) |
-| `FIREBASE_CLIENT_EMAIL` | Firebase client email |
-| `FIREBASE_CLIENT_ID` | Firebase client ID |
-| `FIREBASE_AUTH_URI` | Firebase auth URI |
-| `FIREBASE_TOKEN_URI` | Firebase token URI |
-| `FIREBASE_AUTH_PROVIDER_CERT_URL` | Firebase auth provider cert URL |
-| `FIREBASE_CLIENT_CERT_URL` | Firebase client cert URL |
-| `FIREBASE_UNIVERSE_DOMAIN` | `googleapis.com` |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Full Firebase service account JSON (paste the entire downloaded JSON file) |
 
 **Resulting images on Docker Hub**:
 - `<username>/blockchain101-backend:pre-mined`

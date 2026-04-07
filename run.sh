@@ -1,8 +1,10 @@
 #!/bin/bash
 
 # ─── Config ──────────────────────────────────────────────────────────────────
-BACKEND_URL="http://164.90.242.214:9001"
-FRONTEND_URL="http://138.68.125.204"
+_BACKEND_IP=$(kubectl get service blockchain101-backend -n blockchain101 -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+_FRONTEND_IP=$(kubectl get service blockchain101-frontend -n blockchain101 -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+BACKEND_URL="http://${_BACKEND_IP:-localhost}:9001"
+FRONTEND_URL="http://${_FRONTEND_IP:-localhost:9000}"
 NAMESPACE="blockchain101"
 CLUSTER_NAME="blockchain101-cluster"
 
@@ -56,17 +58,15 @@ menu_scripts() {
   while true; do
     header "🤖  Automation Scripts"
     echo "  1) Populate devnet (transactions + blocks)"
-    echo "  2) Quick populate"
-    echo "  3) Verify blockchain state"
-    echo "  4) Run tests"
+    echo "  2) Verify blockchain state"
+    echo "  3) Run tests"
     echo "  0) Back"
     echo ""
     read -rp "Choose: " opt
     case $opt in
       1) (cd scripts && run npm run populate); pause ;;
-      2) (cd scripts && run npm run populate:quick); pause ;;
-      3) (cd scripts && run npm run verify); pause ;;
-      4) (cd scripts && run npm test); pause ;;
+      2) (cd scripts && run npm run verify); pause ;;
+      3) (cd scripts && run npm test); pause ;;
       0) break ;;
       *) red "Invalid option" ;;
     esac
@@ -141,7 +141,7 @@ menu_app() {
     case $opt in
       1) open $FRONTEND_URL; pause ;;
       2) open $BACKEND_URL/blockchain; pause ;;
-      3) run curl -s $BACKEND_URL/blockchain | python3 -m json.tool | head -30; pause ;;
+      3) curl -s $BACKEND_URL/blockchain | python3 -m json.tool | head -30; pause ;;
       0) break ;;
       *) red "Invalid option" ;;
     esac

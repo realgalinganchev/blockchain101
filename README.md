@@ -118,7 +118,7 @@ blockchain101/
 └── docker-compose.yml       # Multi-container orchestration
 ```
 
-## 🚀 Getting Started
+## 🚀 Getting Started WIP
 
 ### Prerequisites
 

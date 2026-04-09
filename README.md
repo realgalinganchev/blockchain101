@@ -912,6 +912,149 @@ Logs                docker compose logs -f             kubectl logs -f -l app=..
 
 ---
 
+## Notable Technical Details
+
+### nginx reverse proxy — dynamic backend URL via envsubst
+
+- The nginx config is NOT hardcoded — it's a template with a `${BACKEND_HOST}` placeholder
+- When the container starts, nginx automatically runs `envsubst` which swaps the placeholder with the real value from the env var
+- Same Docker image works everywhere — docker-compose injects `backend`, K8s injects the full cluster DNS name
+
+```
+docker compose up
+      │
+      ├─ passes env:  BACKEND_HOST=backend
+      │
+      ▼
+frontend container starts
+      │
+      ├─ envsubst runs: replaces ${BACKEND_HOST} → "backend"
+      │
+      ▼
+nginx.conf generated:
+  set $upstream http://backend:9001   ← Docker DNS resolves this
+      │
+      ▼
+browser hits /api/transaction
+      │
+nginx proxies → http://backend:9001/transaction
+```
+
+---
+
+### run.sh — auto-fetches load balancer IPs from kubectl
+
+- DigitalOcean assigns NEW IPs every time you `terraform destroy + apply` — hardcoding breaks immediately
+- On startup, `run.sh` asks kubectl "what IP did DigitalOcean assign to my services right now?"
+- Falls back to `localhost` automatically if no cluster is running (local dev)
+
+```
+./run.sh starts
+      │
+      ├─ kubectl get service blockchain101-backend  → "164.90.x.x"
+      ├─ kubectl get service blockchain101-frontend → "138.68.x.x"
+      │
+      ├─ cluster reachable? ──YES──► BACKEND_URL=http://164.90.x.x:9001
+      │                              FRONTEND_URL=http://138.68.x.x
+      │
+      └─ cluster down? ───────NO───► BACKEND_URL=http://localhost:9001
+                                     FRONTEND_URL=http://localhost:9000
+      │
+      ▼
+App menu always has valid URLs — no manual editing after terraform destroy/apply
+```
+
+---
+
+### Rolling update — zero-downtime image swap
+
+- K8s doesn't pull new images automatically — you trigger it with `kubectl rollout restart`
+- The rolling update strategy (`maxUnavailable: 1, maxSurge: 0`) swaps pods one at a time
+- On a single-node cluster there's a brief gap (no room for a second pod), but on multi-node it's truly zero-downtime
+
+```
+CI:Build pushes :latest to Docker Hub
+      │
+      ▼
+./run.sh → 4) Kubernetes → 7) Restart deployments
+      │
+      ├─ kubectl rollout restart deployment/blockchain101-backend
+      ├─ kubectl rollout restart deployment/blockchain101-frontend
+      │
+      ▼
+K8s rolling update:
+      │
+      ├─ Pod A (old image) ── Running
+      ├─ Pod A ── Terminating     (brief unavailability on single node)
+      ├─ Pod B (new :latest pulled from Docker Hub) ── Starting
+      └─ Pod B ── Running ✓
+```
+
+---
+
+## Security — Where Secrets Live (and where they don't)
+
+Every secret is injected at runtime. Nothing is baked into images or committed to git.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  SECRET FLOW — from origin to runtime                                       │
+│                                                                             │
+│  Firebase Console                                                           │
+│  (download JSON)                                                            │
+│       │                                                                     │
+│       ├──► backend/.env              LOCAL DEV                              │
+│       │    ├── .gitignore'd          never reaches GitHub                   │
+│       │    ├── docker compose reads  via env_file: ./backend/.env           │
+│       │    └── consumed by           process.env.FIREBASE_* in Node.js     │
+│       │                                                                     │
+│       ├──► GitHub Secrets            CI/CD                                  │
+│       │    ├── FIREBASE_SERVICE_ACCOUNT_JSON  (single JSON blob)           │
+│       │    ├── DOCKER_USERNAME / DOCKER_PASSWORD                            │
+│       │    ├── encrypted at rest     GitHub manages encryption              │
+│       │    ├── masked in logs        GitHub redacts values in output        │
+│       │    └── deploy.yml reads via  ${{ secrets.* }} → writes backend/.env │
+│       │                              at runtime, never cached in image      │
+│       │                                                                     │
+│       ├──► Terraform TF_VAR_*        INFRASTRUCTURE PROVISIONING            │
+│       │    ├── shell env vars        never in terraform.tfvars              │
+│       │    ├── terraform.tfvars      .gitignore'd                           │
+│       │    └── creates k8s Secret    "firebase-credentials" in etcd         │
+│       │                                                                     │
+│       └──► Kubernetes Secret         PRODUCTION RUNTIME                     │
+│            ├── stored encrypted      in DOKS etcd                           │
+│            ├── injected as env vars  secretKeyRef in deployment YAML        │
+│            ├── never in pod spec     only references, not values            │
+│            └── consumed by           process.env.FIREBASE_* in Node.js     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Secret | Where it lives | How it's injected | Protected by |
+|---|---|---|---|
+| Firebase credentials | `backend/.env` (local) | `env_file` in docker-compose | `.gitignore` |
+| Firebase credentials | K8s Secret `firebase-credentials` (prod) | `valueFrom: secretKeyRef` in pod spec | Terraform creates it, stored encrypted in etcd |
+| Firebase credentials | `FIREBASE_SERVICE_ACCOUNT_JSON` (CI) | GitHub Actions writes to `backend/.env` at runtime | GitHub Secrets (encrypted, masked in logs) |
+| DigitalOcean token | `terraform/terraform.tfvars` (local) | `do_token` variable | `.gitignore` |
+| Firebase via Terraform | `TF_VAR_firebase_*` env vars | Shell environment → Terraform variables | Never written to any file |
+| Docker Hub credentials | GitHub Secrets | `docker/login-action` in CI | GitHub Secrets |
+| Backend hostname | `BACKEND_HOST` env var | docker-compose / K8s deployment | Not a secret — but injected, never hardcoded |
+
+```
+.gitignore blocks:
+  backend/.env
+  terraform/terraform.tfvars
+  terraform/terraform.tfstate*
+
+Docker images contain:
+  ✓ compiled code
+  ✗ no .env files
+  ✗ no credentials
+  ✗ no terraform state
+```
+
+---
+
 ## 📄 License
 
 This project is for educational purposes.
@@ -919,3 +1062,8 @@ This project is for educational purposes.
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+TODO-s:
+
+- add to deploy pipeline
+- add Temporal 

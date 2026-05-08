@@ -23,12 +23,12 @@ export async function initializeBlockchain() {
 
   if (blocksFromDB.length === 0) {
     let genesisBlock = createGenesisBlock();
-    blockchain.addBlock(genesisBlock);
+    blockchain.chain.push(genesisBlock);
     await saveBlock(genesisBlock);
   } else {
     blocksFromDB.forEach((blockData) => {
       let block = constructBlock(blockData);
-      blockchain.addBlock(block);
+      blockchain.chain.push(block);
     });
   }
 }
@@ -44,11 +44,8 @@ export async function mineBlock(): Promise<BlockType & { miningTime: number }> {
     shouldAbortMining = false;
     const startTime = Date.now();
 
-    // Always re-read chain from Firebase to get the true latest block hash
-    const blocksFromDB = await getBlocks();
-    const latestBlockData = blocksFromDB[blocksFromDB.length - 1];
-    const previousHash = latestBlockData.hash;
-    const blockNumber = blocksFromDB.length;
+    const previousHash = blockchain.getLatestBlock().hash;
+    const blockNumber = blockchain.chain.length;
     let selectedTransactions: EthereumTransaction[] = getSelectedTransactions(
       mempool,
       MAX_TRANSACTIONS

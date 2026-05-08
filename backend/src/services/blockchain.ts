@@ -43,6 +43,16 @@ export async function mineBlock(): Promise<BlockType & { miningTime: number }> {
     currentMiningState.isMining = true;
     shouldAbortMining = false;
     const startTime = Date.now();
+
+    // Re-read chain from Firebase to ensure in-memory state is current
+    const blocksFromDB = await getBlocks();
+    if (blocksFromDB.length !== blockchain.chain.length) {
+      blockchain.chain = [];
+      blocksFromDB.forEach((blockData) => {
+        blockchain.chain.push(constructBlock(blockData));
+      });
+    }
+
     const previousHash = blockchain.getLatestBlock().hash;
     const blockNumber = blockchain.getLatestBlock().number + 1;
     let selectedTransactions: EthereumTransaction[] = getSelectedTransactions(

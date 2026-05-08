@@ -120,6 +120,20 @@ jobs:
           cd scripts && npm test
           cd .. && docker compose down
 
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save blockchain101-cluster
+
+      - name: Restart K8s deployments to pull new image
+        run: |
+          kubectl rollout restart deployment/blockchain101-backend deployment/blockchain101-frontend -n blockchain101
+          kubectl rollout status deployment/blockchain101-backend -n blockchain101 --timeout=120s
+          kubectl rollout status deployment/blockchain101-frontend -n blockchain101 --timeout=120s
+
       - name: Output summary
         run: |
           echo "## Pre-Mined Blockchain Images Built Successfully! 🎉" >> $GITHUB_STEP_SUMMARY

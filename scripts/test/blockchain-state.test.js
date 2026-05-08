@@ -196,6 +196,47 @@ async function testBlockchainState() {
       assert(true, 'Block timestamps are in chronological order');
     }
 
+    // Test 12: Mining continuity — new block must link to previous latest block
+    console.log(chalk.blue('\nTest Suite: Mining Continuity'));
+    try {
+      // Fetch a fresh snapshot and chain-walk it (same logic the backend uses)
+      const freshResponse = await axios.get(`${backendUrl}/blockchain`);
+      const freshBlocks = freshResponse.data;
+      const genesisB = freshBlocks.find(b => b.previousHash === '0');
+      let latestBeforeMine = freshBlocks[freshBlocks.length - 1];
+      if (genesisB) {
+        const hm = new Map(freshBlocks.map(b => [b.previousHash, b]));
+        const s = [];
+        let cur = genesisB;
+        while (cur) { s.push(cur); cur = hm.get(cur.hash); }
+        if (s.length > 0) latestBeforeMine = s[s.length - 1];
+      }
+      const expectedParentHash = latestBeforeMine.hash;
+
+      // Add one transaction so there's something to mine
+      const { randomBytes } = await import('crypto');
+      await axios.post(`${backendUrl}/transaction`, {
+        id: randomBytes(16).toString('hex'),
+        from: '0x' + randomBytes(20).toString('hex'),
+        to: '0x' + randomBytes(20).toString('hex'),
+        value: 1000000,
+        gasLimit: 21000,
+        gasPrice: 1000000000,
+        nonce: 0,
+        data: '0x'
+      });
+
+      // Mine a block (use long timeout — difficulty may vary)
+      const mineResponse = await axios.get(`${backendUrl}/mine`, { timeout: 120000 });
+      const newBlock = mineResponse.data;
+
+      assertEqual(newBlock.previousHash, expectedParentHash,
+        `Newly mined block previousHash matches previous latest block hash`);
+      assert(newBlock.hash && newBlock.hash.length > 0, 'Newly mined block has a hash');
+    } catch (error) {
+      assert(false, `Mining continuity test failed: ${error.message}`);
+    }
+
     // Summary
     console.log(chalk.bold.cyan('\n📊 Test Summary\n'));
     console.log(chalk.green(`  Passed: ${testsPassed}`));

@@ -14,6 +14,8 @@ export function createGenesisBlock(): BlockClass {
 export function constructBlock(blockData: any): BlockClass {
   let block = new BlockClass(blockData.data, blockData.previousHash);
   block.timestamp = blockData.timestamp;
+  block.nonce = blockData.nonce;
+  block.hash = blockData.hash;
   block.transactions = blockData.transactions;
   block.transactionsDetailed = blockData.transactionsDetailed;
   block.difficulty = blockData.difficulty;

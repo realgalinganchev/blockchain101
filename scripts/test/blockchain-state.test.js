@@ -69,8 +69,16 @@ async function testBlockchainState() {
     // Test 3: Genesis block validation
     console.log(chalk.blue('\nTest Suite: Genesis Block'));
     if (blocks.length > 0) {
-      // Sort blocks by timestamp to ensure genesis is first
-      blocks.sort((a, b) => a.timestamp - b.timestamp);
+      // Sort blocks by following previousHash links from genesis
+      const genesisBlock = blocks.find(b => b.previousHash === '0');
+      if (genesisBlock) {
+        const hashMap = new Map(blocks.map(b => [b.previousHash, b]));
+        const sorted = [];
+        let current = genesisBlock;
+        while (current) { sorted.push(current); current = hashMap.get(current.hash); }
+        if (sorted.length === blocks.length) blocks.splice(0, blocks.length, ...sorted);
+        else blocks.sort((a, b) => a.timestamp - b.timestamp);
+      }
       const genesis = blocks[0];
 
       assertEqual(genesis.previousHash, '0', 'Genesis block previousHash is "0"');

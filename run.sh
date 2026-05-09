@@ -38,16 +38,20 @@ menu_docker() {
     header "🐳  Docker"
     echo "  1) Start local devnet"
     echo "  2) Rebuild + start local devnet"
-    echo "  3) Stop local devnet"
-    echo "  4) Tail logs"
+    echo "  3) Force rebuild (no cache) + start local devnet"
+    echo "  4) Stop local devnet"
+    echo "  5) Tail logs"
     echo "  0) Back"
     echo ""
     read -rp "Choose: " opt
     case $opt in
       1) run docker compose up -d; pause ;;
       2) run docker compose up --build -d; pause ;;
-      3) run docker compose down; pause ;;
-      4) docker compose logs -f ;;
+      3) run docker compose down
+         run docker compose build --no-cache
+         run docker compose up -d; pause ;;
+      4) run docker compose down; pause ;;
+      5) docker compose logs -f ;;
       0) break ;;
       *) red "Invalid option" ;;
     esac

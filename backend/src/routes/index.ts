@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { addTransaction, mineBlock, mempool, getDifficulty, setDifficulty, addMiningProgressListener, removeMiningProgressListener, getMiningState, abortMining, clearMempool } from "../services/blockchain";
+import { addTransaction, mineBlock, mempool, getDifficulty, setDifficulty, addMiningProgressListener, removeMiningProgressListener, getMiningState, abortMining, resetBlockchain } from "../services/blockchain";
 import { db } from "../services/db/firebaseInit";
 import { BlockType } from "../types/block";
 
@@ -48,7 +48,7 @@ router.get("/mine", async (_req: Request, res: Response) => {
 
 router.delete("/blockchain", async (_req: Request, res: Response) => {
   try {
-    // Delete blockchain
+    // Delete blockchain from Firebase
     const blocksSnapshot = await db.collection("blockchain").get();
     const blocksBatch = db.batch();
     blocksSnapshot.docs.forEach((doc) => {
@@ -64,8 +64,8 @@ router.delete("/blockchain", async (_req: Request, res: Response) => {
     });
     await mempoolBatch.commit();
 
-    // Clear in-memory mempool
-    clearMempool();
+    // Reset in-memory state and create fresh genesis block
+    await resetBlockchain();
 
     res.sendStatus(200);
   } catch (error: any) {

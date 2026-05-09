@@ -137,4 +137,12 @@ export function clearMempool() {
   mempool.length = 0;
 }
 
+export async function resetBlockchain() {
+  blockchain.chain.length = 0;
+  mempool.length = 0;
+  const genesisBlock = createGenesisBlock();
+  blockchain.chain.push(genesisBlock);
+  await saveBlock(genesisBlock);
+}
+
 export { mempool };

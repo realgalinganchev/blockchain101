@@ -199,7 +199,7 @@ const App = () => {
       )}
       <div className="difficulty-controls">
         <label htmlFor="difficulty-slider">
-          Mining Difficulty: {difficulty} leading zeros
+          Set Mining Difficulty To: {difficulty} leading zeros
         </label>
         <input
           id="difficulty-slider"

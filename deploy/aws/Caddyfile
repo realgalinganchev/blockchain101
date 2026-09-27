@@ -1,0 +1,7 @@
+# Caddy obtains and renews the Let's Encrypt certificate for $DOMAIN automatically
+# once the DNS record points at this host. Server-Sent Events are streamed unbuffered.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy frontend:80
+	header -Server
+}

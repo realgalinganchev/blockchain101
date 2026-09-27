@@ -3,8 +3,12 @@
 ![CI:Build](https://img.shields.io/github/actions/workflow/status/realgalinganchev/blockchain101/build.yml?label=CI%3ABuild&branch=main)
 ![CI:Deploy](https://img.shields.io/github/actions/workflow/status/realgalinganchev/blockchain101/deploy.yml?label=CI%3ADeploy&branch=main)
 ![Docker](https://img.shields.io/badge/docker-galinganchev%2Fblockchain101-blue?logo=docker)
+![AWS](https://img.shields.io/badge/AWS-EC2%20%2B%20SSM-FF9900?logo=amazonwebservices)
+![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform)
 ![Kubernetes](https://img.shields.io/badge/kubernetes-DOKS-326CE5?logo=kubernetes)
 ![License](https://img.shields.io/badge/license-educational-green)
+
+**▶ Live demo: [blockchain101.founderexchange.co](https://blockchain101.founderexchange.co)** — add transactions, mine blocks and watch the nonce search stream in live. Runs on AWS, deployed by GitHub Actions; the demo chain resets every night. See [Production Deployment (AWS)](#%EF%B8%8F-production-deployment-aws).
 
 An educational blockchain application demonstrating proof-of-work mining, transactions, and real-time updates using Server-Sent Events (SSE).
 
@@ -462,9 +466,46 @@ npm test
 
 ---
 
+## ☁️ Production Deployment (AWS)
+
+The live demo runs on a single **EC2 instance** provisioned with **Terraform** (`deploy/aws/terraform`), sized for a portfolio demo at roughly $13–14/month.
+
+```
+visitor ──HTTPS──▶ Caddy (auto Let's Encrypt) ──▶ nginx frontend ──/api──▶ Node backend ──▶ Firestore
+                   └──────────────── Docker Compose on EC2 t3.micro (Amazon Linux 2023) ──────────────┘
+```
+
+**Infrastructure (Terraform):** EC2 with an Elastic IP, a security group exposing only 80/443 (**no SSH**, the host is managed through **SSM Session Manager**), an instance role that can read only this app's SSM parameters, IMDSv2-only metadata, an encrypted gp3 root volume, and `standard` CPU credits so sustained load is throttled rather than billed. A random admin token is generated into SSM Parameter Store.
+
+**Deploys (GitHub Actions, `CI:Deploy`):** the job assumes an AWS role through **OIDC** (no long-lived AWS keys in the repo), writes the Firebase service account to **SSM Parameter Store** as a SecureString, and runs `blockchain101-deploy` on the host through **SSM Run Command**. That script fetches `deploy/aws/` for the exact commit, builds a root-only `.env` from SSM, pulls the images and restarts the stack, then the job smoke-tests the public URL. It runs on labelled PR merges, on demand, and nightly to restore the pre-mined demo chain.
+
+**Hardening for a public demo** (all off locally, configured in `deploy/aws/docker-compose.yml`):
+
+| Control | Setting |
+|---|---|
+| Chain reset (`DELETE /blockchain`) | requires `x-admin-token` (`ADMIN_TOKEN`) |
+| Difficulty | capped at 5 leading zeros (`MAX_DIFFICULTY`) |
+| Mining | one miner at a time (409), auto-abort after 60s (`MAX_MINING_MS`) |
+| Mempool | capped at 100 pending transactions (`MAX_MEMPOOL`) |
+| Rate limits | per-IP limits on mining, transactions and control endpoints; `TRUST_PROXY_HOPS=2` so limits see the visitor behind Caddy → nginx |
+| Payloads | JSON bodies capped at 16 KB |
+
+**Provision it yourself:**
+
+```bash
+cd deploy/aws/terraform
+terraform init && terraform apply          # prints public_ip and github_deploy_role_arn
+# 1. DNS: A record  <your domain>  ->  public_ip
+# 2. GitHub secret AWS_DEPLOY_ROLE_ARN = github_deploy_role_arn
+# 3. Run the CI:Deploy workflow (or merge a PR labelled CI:Deploy)
+aws ssm start-session --target <instance_id>   # shell access without SSH
+```
+
+---
+
 ## ☸️ Kubernetes Deployment (DigitalOcean)
 
-The app deploys to **DigitalOcean Kubernetes Service (DOKS)**. Default config: 1 node, `s-1vcpu-2gb` size (~$12/mo), region `fra1` (Frankfurt).
+An alternative target, kept for reference: the app also deploys to **DigitalOcean Kubernetes Service (DOKS)**. Default config: 1 node, `s-1vcpu-2gb` size (~$12/mo), region `fra1` (Frankfurt).
 
 ### Infrastructure (via Terraform)
 

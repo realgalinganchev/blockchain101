@@ -3,10 +3,25 @@ name: CI:Deploy - Build Pre-Mined Blockchain Image
 on:
   pull_request:
     types: [closed]
+  workflow_dispatch: # manual redeploy
+  schedule:
+    - cron: "0 3 * * *" # nightly: restore the pre-mined demo chain
+
+permissions:
+  id-token: write # AWS OIDC
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  DEMO_URL: https://blockchain101.founderexchange.co
 
 jobs:
   deploy-premined:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+    if: github.event_name != 'pull_request' || (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy'))
     runs-on: ubuntu-latest
 
     steps:
@@ -122,19 +137,50 @@ jobs:
           cd scripts && npm run verify
           cd .. && docker compose down
 
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure kubectl
-        run: doctl kubernetes cluster kubeconfig save blockchain101-cluster
-
-      - name: Restart K8s deployments to pull new image
+      - name: Store Firebase credentials in SSM Parameter Store
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: |
-          kubectl rollout restart deployment/blockchain101-backend deployment/blockchain101-frontend -n blockchain101
-          kubectl rollout status deployment/blockchain101-backend -n blockchain101 --timeout=120s
-          kubectl rollout status deployment/blockchain101-frontend -n blockchain101 --timeout=120s
+          aws ssm put-parameter --name /blockchain101/firebase-service-account \
+            --type SecureString --overwrite --value "$FIREBASE_SERVICE_ACCOUNT_JSON" > /dev/null
+
+      - name: Deploy to EC2 through SSM Run Command
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --document-name AWS-RunShellScript \
+            --targets Key=tag:Name,Values=blockchain101 \
+            --comment "blockchain101 deploy ${{ github.sha }}" \
+            --parameters 'commands=["GIT_REF=${{ github.event.pull_request.merge_commit_sha || github.sha }} /usr/local/bin/blockchain101-deploy"]' \
+            --query Command.CommandId --output text)
+          echo "SSM command: $CMD_ID"
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm list-command-invocations --command-id "$CMD_ID" \
+              --query 'CommandInvocations[0].Status' --output text)
+            echo "  status: $STATUS"
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut|Undeliverable|Terminated)
+                aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+                  --query 'CommandInvocations[0].CommandPlugins[0].Output' --output text
+                exit 1 ;;
+            esac
+            sleep 5
+          done
+          [ "$STATUS" = "Success" ] || { echo "Deploy did not finish in time"; exit 1; }
+
+      - name: Smoke test the live demo
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$DEMO_URL/api/difficulty" > /dev/null; then echo "Live: $DEMO_URL"; exit 0; fi
+            sleep 5
+          done
+          echo "Demo did not respond at $DEMO_URL"; exit 1
 
       - name: Output summary
         run: |
@@ -143,3 +189,5 @@ jobs:
           echo "### Images pushed to Docker Hub:" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ secrets.DOCKER_USERNAME }}/blockchain101-backend:pre-mined\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ secrets.DOCKER_USERNAME }}/blockchain101-frontend:pre-mined\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Live demo: $DEMO_URL" >> $GITHUB_STEP_SUMMARY

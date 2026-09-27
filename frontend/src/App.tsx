@@ -15,6 +15,7 @@ const App = () => {
   const [isLoadingBlock, setIsLoadingBlock] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [difficulty, setDifficultyState] = useState(4);
+  const [maxDifficulty, setMaxDifficulty] = useState(7);
   const [lastMiningTime, setLastMiningTime] = useState<number | null>(null);
   const [miningAbortController, setMiningAbortController] = useState<AbortController | null>(null);
   const [currentMiningHash, setCurrentMiningHash] = useState<string>("");
@@ -28,6 +29,21 @@ const App = () => {
 
   const fetchBlockchain = useFetchData(`${API_URL}/blockchain`, setBlocks);
   const fetchMempool = useFetchData(`${API_URL}/mempool`, setMempool);
+
+  // The server owns difficulty (and caps it on the public demo), so start from its values.
+  const fetchDifficulty = React.useCallback(() => {
+    fetch(`${API_URL}/difficulty`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data: { difficulty: number; maxDifficulty?: number }) => {
+        setDifficultyState(data.difficulty);
+        if (data.maxDifficulty) setMaxDifficulty(data.maxDifficulty);
+      })
+      .catch((error) => console.error("Error fetching difficulty:", error));
+  }, []);
+
+  React.useEffect(() => {
+    fetchDifficulty();
+  }, [fetchDifficulty]);
 
   // Set up persistent SSE connection on mount
   React.useEffect(() => {
@@ -70,6 +86,11 @@ const App = () => {
         signal: abortController.signal,
       });
       const data = await response.json();
+      if (!response.ok) {
+        // Already mining (409), timed out (503), rate limited (429) or aborted (499)
+        if (response.status !== 499) alert(data.error ?? `Mining failed (HTTP ${response.status})`);
+        return;
+      }
       if (data.miningTime) {
         setLastMiningTime(data.miningTime);
       }
@@ -156,9 +177,15 @@ const App = () => {
 
     setIsDeleting(true);
     try {
-      await fetch(`${API_URL}/blockchain`, {
+      const response = await fetch(`${API_URL}/blockchain`, {
         method: "DELETE",
       });
+      if (!response.ok) {
+        // 403 on the public demo, where resets are admin-only
+        const data = await response.json().catch(() => ({}));
+        alert(data.error ?? `Reset failed (HTTP ${response.status})`);
+        return;
+      }
       setBlocks([]);
       setMempool([]);
     } catch (error) {
@@ -177,9 +204,17 @@ const App = () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ difficulty: newDifficulty }),
-    }).catch((error) => {
-      console.error("Error setting difficulty:", error);
-    });
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          alert(data.error ?? `Could not set difficulty (HTTP ${response.status})`);
+          fetchDifficulty(); // snap the slider back to the server's value
+        }
+      })
+      .catch((error) => {
+        console.error("Error setting difficulty:", error);
+      });
   };
 
   return (
@@ -205,7 +240,7 @@ const App = () => {
           id="difficulty-slider"
           type="range"
           min="1"
-          max="7"
+          max={maxDifficulty}
           value={difficulty}
           onChange={(e) => handleDifficultyChange(Number(e.target.value))}
         />

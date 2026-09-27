@@ -1,0 +1,37 @@
+#!/bin/bash
+# First boot of the demo host (Amazon Linux 2023): Docker + Compose, a swap file for the
+# 1 GB t3.micro, and the blockchain101-deploy command that CI runs through SSM.
+set -euxo pipefail
+
+dnf install -y docker
+systemctl enable --now docker
+
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=1024
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+cat > /usr/local/bin/blockchain101-deploy <<'EOF'
+#!/bin/bash
+# Fetches deploy/aws/deploy.sh for GIT_REF (default main) and runs it.
+set -euo pipefail
+export AWS_REGION="${region}"
+export REPO="${repo}"
+export GIT_REF="$${GIT_REF:-main}"
+curl -fsSL "https://raw.githubusercontent.com/$REPO/$GIT_REF/deploy/aws/deploy.sh" | bash
+EOF
+chmod +x /usr/local/bin/blockchain101-deploy
+
+# Start right away if CI has already stored the Firebase key; otherwise the first
+# CI deploy starts the stack.
+if aws ssm get-parameter --region "${region}" --name /blockchain101/firebase-service-account >/dev/null 2>&1; then
+  /usr/local/bin/blockchain101-deploy || true
+fi

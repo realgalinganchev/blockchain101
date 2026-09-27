@@ -6,6 +6,7 @@ import { BlockType, EthereumTransaction } from "../types/block";
 import { constructBlock, createGenesisBlock, createNewBlock } from "../utils/block";
 import { getSelectedTransactions, prepareTransactionsForBlock } from "../utils/transaction";
 import { addTransactionToMempool, getTransactionsFromMempool, removeTransactionFromMempool } from "./db/mempool";
+import { MAX_MINING_MS } from "../middleware/security";
 
 const blockchain = Blockchain.instance;
 let mempool: EthereumTransaction[] = [];
@@ -53,15 +54,19 @@ export async function mineBlock(): Promise<BlockType & { miningTime: number }> {
     selectedTransactions = prepareTransactionsForBlock(selectedTransactions);
     let block = createNewBlock(selectedTransactions, previousHash, blockNumber);
 
+    // On the public demo, give up after MAX_MINING_MS so one request can't hog the CPU.
+    const deadline = MAX_MINING_MS > 0 ? startTime + MAX_MINING_MS : Infinity;
+
     // Calculate proof of work with progress callback
     try {
       await calculateProofOfWork(block, currentDifficulty, (hash, nonce) => {
         currentMiningState.hash = hash;
         currentMiningState.nonce = nonce;
         miningProgressListeners.forEach(listener => listener(hash, nonce));
-      }, () => shouldAbortMining);
+      }, () => shouldAbortMining || Date.now() > deadline);
     } catch (error: any) {
       if (error.message === "Mining aborted") {
+        if (Date.now() > deadline) error = new Error("Mining timed out");
         console.log("Mining was aborted, cleaning up...");
         currentMiningState.isMining = false;
         currentMiningState.hash = "";
@@ -131,6 +136,10 @@ export function abortMining() {
   currentMiningState.isMining = false;
   currentMiningState.hash = "";
   currentMiningState.nonce = 0;
+}
+
+export function getMempoolSize(): number {
+  return mempool.length;
 }
 
 export function clearMempool() {

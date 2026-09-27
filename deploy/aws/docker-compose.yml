@@ -1,0 +1,47 @@
+# Production stack on the EC2 host: Caddy (HTTPS) -> nginx frontend -> Node backend.
+# deploy.sh writes .env next to this file from SSM Parameter Store before starting it.
+name: blockchain101
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # Let's Encrypt certificates survive restarts
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
+  frontend:
+    image: galinganchev/blockchain101-frontend:latest
+    restart: unless-stopped
+    environment:
+      - BACKEND_HOST=backend
+      - BACKEND_RESOLVER=127.0.0.11
+    depends_on:
+      - backend
+
+  backend:
+    image: galinganchev/blockchain101-backend:latest
+    restart: unless-stopped
+    env_file: .env # Firebase credentials + ADMIN_TOKEN
+    environment:
+      - NODE_ENV=production
+      - TRUST_PROXY_HOPS=2 # Caddy -> nginx -> backend
+      - CORS_ORIGIN=https://${DOMAIN}
+      # Public-demo limits
+      - RATE_LIMITS=on
+      - MAX_DIFFICULTY=5
+      - MAX_MINING_MS=60000
+      - MAX_MEMPOOL=100
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,6 @@
+# Copy to backend.hcl (gitignored). Create the bucket once (private, versioned):
+#   aws s3api create-bucket --bucket <name> --region eu-central-1 \
+#     --create-bucket-configuration LocationConstraint=eu-central-1
+#   aws s3api put-bucket-versioning --bucket <name> --versioning-configuration Status=Enabled
+bucket = "blockchain101-tfstate-<account-id>"
+region = "eu-central-1"

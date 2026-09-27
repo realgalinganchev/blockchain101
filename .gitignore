@@ -48,3 +48,6 @@ deploy/aws/terraform/.terraform/
 deploy/aws/terraform/*.tfstate
 deploy/aws/terraform/*.tfstate.*
 deploy/aws/terraform/terraform.tfvars
+deploy/aws/terraform/backend.hcl
+deploy/aws/terraform/tfplan
+deploy/aws/terraform/*.tfplan

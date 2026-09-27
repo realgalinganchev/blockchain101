@@ -10,6 +10,8 @@
 
 **▶ Live demo: [blockchain101.founderexchange.co](https://blockchain101.founderexchange.co)** — add transactions, mine blocks and watch the nonce search stream in live. Runs on AWS, deployed by GitHub Actions; the demo chain resets every night. See [Production Deployment (AWS)](#%EF%B8%8F-production-deployment-aws).
 
+[![blockchain101 mining a block live: nonce counter, hash leading zeros against the target, mempool and linked chain](frontend/public/og.png)](https://blockchain101.founderexchange.co)
+
 An educational blockchain application demonstrating proof-of-work mining, transactions, and real-time updates using Server-Sent Events (SSE).
 
 This project models the core mechanics of **Ethereum's Proof-of-Work consensus** (pre-Merge, pre-EIP-3675). It uses the same cryptographic primitives — **Keccak-256** hashing and **RLP encoding** — the same nonce-based mining loop, and a block structure mirroring Ethereum's (`nonce`, `previousHash`, `gasLimit`, `gasUsed`, `miner`, `timestamp`, `transactions`). Difficulty is represented as a leading-zero target on the hash, analogous to Ethereum's target threshold. The chain omits Ethash's DAG/epoch complexity and the P2P network layer, keeping the focus on the fundamental PoW mechanics.

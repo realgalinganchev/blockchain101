@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import "./styles/App.css";
-import BlockView from "./components/BlockView";
+import BlockView, { timeAgo } from "./components/BlockView";
+import HashText from "./components/HashText";
 import { createTransaction } from "./utils/calc";
 import MempoolView from "./components/MempoolView";
 import { useFetchData } from "./hooks/useFetchData";
@@ -73,6 +74,13 @@ const App = () => {
       es.close();
     };
   }, []);
+
+  // Keep the newest block in view as the chain grows
+  const chainRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const el = chainRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [blocks.length, isLoadingBlock]);
 
   const mineBlock = async () => {
     setIsLoadingBlock(true);
@@ -217,78 +225,159 @@ const App = () => {
       });
   };
 
+  const sortedBlocks = [...blocks].sort((a, b) => a.timestamp - b.timestamp);
+  const height = Math.max(sortedBlocks.length - 1, 0);
+  const latest = sortedBlocks[sortedBlocks.length - 1];
+  const target = "0".repeat(difficulty);
+  const liveHex = currentMiningHash.replace(/^0x/, "");
+  const matched = (liveHex.match(/^0*/) ?? [""])[0].length;
+
   return (
-    <div className="app">
-      {showSuccessPopup && successData && (
-        <div className="success-popup">
-          <div className="success-popup-content">
-            <h2 className="game-font">Block Mined!</h2>
-            <p><strong>Difficulty:</strong> {successData.difficulty} leading zeros</p>
-            <p><strong>Final Nonce:</strong> {parseInt(successData.nonce, 16)}</p>
-            <p><strong>Hash:</strong> {(() => {
-              const cleanHash = successData.hash.replace('0x', '');
-              return `${cleanHash.slice(0, 10)}...${cleanHash.slice(-3)}`;
-            })()}</p>
+    <div className="page">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand__mark" aria-hidden>
+            <svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7z" /><path d="M3 7l9 5 9-5M12 12v10" /></svg>
+          </span>
+          <span className="brand__name">blockchain101</span>
+          <span className="brand__tag">PoW · pre-Merge Ethereum</span>
+        </div>
+        <a className="link" href="https://github.com/realgalinganchev/blockchain101" target="_blank" rel="noreferrer">
+          Source on GitHub ↗
+        </a>
+      </header>
+
+      <section className="hero">
+        <h1>Mine a block, <span className="accent">live</span>.</h1>
+        <p>
+          Add signed transactions to the mempool, then mine. The node searches for a nonce until the block's
+          Keccak-256 hash starts with the target number of zeros: proof of work, as Ethereum did it before the Merge.
+        </p>
+        <div className="stats">
+          <div className="stat"><span className="stat__label">Height</span><span className="stat__value">{height}</span></div>
+          <div className="stat"><span className="stat__label">Pending</span><span className="stat__value">{mempool.length}</span></div>
+          <div className="stat"><span className="stat__label">Difficulty</span><span className="stat__value">{difficulty} zero{difficulty === 1 ? "" : "s"}</span></div>
+          <div className="stat">
+            <span className="stat__label">Last block</span>
+            <span className="stat__value">{latest?.timestamp ? timeAgo(latest.timestamp) : "—"}</span>
           </div>
         </div>
-      )}
-      <div className="difficulty-controls">
-        <label htmlFor="difficulty-slider">
-          Set Mining Difficulty To: {difficulty} leading zeros
-        </label>
-        <input
-          id="difficulty-slider"
-          type="range"
-          min="1"
-          max={maxDifficulty}
-          value={difficulty}
-          onChange={(e) => handleDifficultyChange(Number(e.target.value))}
-        />
-        {lastMiningTime !== null && (
-          <div className="mining-stats">
-            Last block mined in: {(lastMiningTime / 1000).toFixed(2)}s
-          </div>
-        )}
-      </div>
-      <MempoolView mempool={mempool} isLoading={isLoadingTx} />
-      <button onClick={addTransaction} disabled={isLoadingTx}>
-        Add Tx to Mempool
-      </button>
-      {isLoadingBlock ? (
-        <button className="stop-mining" onClick={stopMining}>
-          Stop Mining
-        </button>
-      ) : (
-        <button className="mine" onClick={mineBlock}>
-          Mine Block
-        </button>
-      )}
-      <button className="delete" onClick={deleteBlockchain} disabled={isDeleting}>
-        Delete Blockchain
-      </button>
-      <div className="blockchain">
-        <h1 className="game-font">Blockchain</h1>
-        <div className="blocks-container">
-          {blocks
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .map((block: BlockType, index: number) => (
-              <BlockView
-                key={index}
-                block={block}
-                index={index}
-                isCompactView={blocks.length > 6}
-              />
-            ))}
-          {isLoadingBlock && (
-            <div className="mining-block">
-              <div className="mining-progress">
-                <p>Nonce: {currentNonce || "Starting..."}</p>
-                <p>Hash: {currentMiningHash ? currentMiningHash.substring(0, 20) + "..." : "Waiting..."}</p>
-              </div>
+      </section>
+
+      <main className="grid">
+        <section className="card controls">
+          <header className="card__head">
+            <h2>Miner</h2>
+            {lastMiningTime !== null && (
+              <span className="count">last block in {(lastMiningTime / 1000).toFixed(2)}s</span>
+            )}
+          </header>
+
+          <div className="field">
+            <div className="field__label">
+              Difficulty <span className="muted">≈ {Math.pow(16, difficulty).toLocaleString()} hashes on average</span>
             </div>
+            <div className="segmented" role="radiogroup" aria-label="Mining difficulty">
+              {Array.from({ length: maxDifficulty }, (_, i) => i + 1).map((d) => (
+                <button
+                  key={d}
+                  role="radio"
+                  aria-checked={difficulty === d}
+                  className={`segmented__item${difficulty === d ? " is-active" : ""}`}
+                  onClick={() => handleDifficultyChange(d)}
+                  disabled={isLoadingBlock}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isLoadingBlock ? (
+            <div className="mining">
+              <div className="mining__row">
+                <span className="pulse" /> Mining block #{height + 1}
+              </div>
+              <div className="mining__nonce">{currentNonce.toLocaleString()}</div>
+              <div className="mining__label">nonces tried</div>
+              <div className="mining__hash">
+                <span className="hash-prefix">0x</span>
+                <span className="hash-zeros">{liveHex.slice(0, Math.min(matched, difficulty))}</span>
+                <span className="mining__rest">{liveHex.slice(Math.min(matched, difficulty), 40) || "waiting…"}</span>
+              </div>
+              <div className="mining__label">target: 0x{target}…</div>
+            </div>
+          ) : (
+            <p className="hint">
+              Each extra zero makes a valid hash ~16× rarer. The live demo caps difficulty at {maxDifficulty} and stops
+              mining after 60 seconds.
+            </p>
+          )}
+
+          <div className="actions">
+            <button className="btn btn--secondary" onClick={addTransaction} disabled={isLoadingTx || isLoadingBlock}>
+              + Add transaction
+            </button>
+            {isLoadingBlock ? (
+              <button className="btn btn--danger" onClick={stopMining}>
+                ■ Stop mining
+              </button>
+            ) : (
+              <button className="btn btn--primary" onClick={mineBlock}>
+                ⛏ Mine block
+              </button>
+            )}
+          </div>
+        </section>
+
+        <MempoolView mempool={mempool} isLoading={isLoadingTx} />
+      </main>
+
+      <section className="card chain">
+        <header className="card__head">
+          <h2>Chain</h2>
+          <span className="count">
+            {sortedBlocks.length} blocks
+            <button className="btn-link" onClick={deleteBlockchain} disabled={isDeleting}>
+              reset
+            </button>
+          </span>
+        </header>
+        <div className="chain__scroll" ref={chainRef}>
+          {sortedBlocks.map((block: BlockType, index: number) => (
+            <BlockView key={block.hash ?? index} block={block} index={index} />
+          ))}
+          {isLoadingBlock && (
+            <article className="block block--mining">
+              <header className="block__head">
+                <span className="block__height">#{height + 1}</span>
+                <span className="badge badge--live">mining</span>
+              </header>
+              <dl className="block__fields">
+                <div><dt>Nonce</dt><dd className="mono">{currentNonce.toLocaleString()}</dd></div>
+                <div><dt>Hash</dt><dd><HashText hash={currentMiningHash || undefined} /></dd></div>
+              </dl>
+            </article>
           )}
         </div>
-      </div>
+      </section>
+
+      <footer className="footer">
+        Built by <a href="https://www.linkedin.com/in/realgalinganchev/" target="_blank" rel="noreferrer">Galin Ganchev</a>
+        {" · "}TypeScript, React, Node.js · Runs on AWS (Terraform, GitHub Actions){" · "}
+        <a href="https://github.com/realgalinganchev/blockchain101" target="_blank" rel="noreferrer">Source</a>
+      </footer>
+
+      {showSuccessPopup && successData && (
+        <div className="toast" role="status">
+          <div className="toast__title">Block mined</div>
+          <div className="toast__body">
+            nonce {parseInt(successData.nonce, 16).toLocaleString()} · difficulty {successData.difficulty}
+            {lastMiningTime !== null && <> · {(lastMiningTime / 1000).toFixed(2)}s</>}
+          </div>
+          <HashText hash={successData.hash} head={10} tail={6} />
+        </div>
+      )}
     </div>
   );
 };

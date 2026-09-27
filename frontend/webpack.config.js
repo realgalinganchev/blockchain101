@@ -50,5 +50,14 @@ module.exports = {
     static: path.join(__dirname, "public"),
     compress: true,
     port: 9000,
+    // Local dev: forward API calls to a backend (default: the local one on 9001)
+    proxy: [
+      {
+        context: ["/api"],
+        target: process.env.DEV_API_TARGET || "http://localhost:9001",
+        pathRewrite: process.env.DEV_API_TARGET ? {} : { "^/api": "" },
+        changeOrigin: true,
+      },
+    ],
   },
 };

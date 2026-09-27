@@ -18,7 +18,8 @@ RUN npm run build
 # Production stage - serve with nginx
 FROM nginx:alpine
 
-# Copy built files to nginx
+# Static assets (favicon, sounds, link-preview image), then the built app on top
+COPY --from=builder /app/public /usr/share/nginx/html
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration template

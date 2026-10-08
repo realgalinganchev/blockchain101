@@ -213,18 +213,18 @@ async function testBlockchainState() {
       }
       const expectedParentHash = latestBeforeMine.hash;
 
-      // Add one transaction so there's something to mine
-      const { randomBytes } = await import('crypto');
-      await axios.post(`${backendUrl}/transaction`, {
-        id: randomBytes(16).toString('hex'),
-        from: '0x' + randomBytes(20).toString('hex'),
-        to: '0x' + randomBytes(20).toString('hex'),
-        value: 1000000,
-        gasLimit: 21000,
-        gasPrice: 1000000000,
+      // Add one signed transaction so there's something to mine
+      const { ethers } = await import('ethers');
+      const raw = await ethers.Wallet.createRandom().signTransaction({
+        chainId: 1337,
         nonce: 0,
+        to: ethers.Wallet.createRandom().address,
+        value: ethers.utils.parseEther('0.5'),
+        gasLimit: 21000,
+        gasPrice: ethers.utils.parseUnits('20', 'gwei'),
         data: '0x'
       });
+      await axios.post(`${backendUrl}/transaction`, { raw });
 
       // Mine a block (use long timeout — difficulty may vary)
       const mineResponse = await axios.get(`${backendUrl}/mine`, { timeout: 120000 });

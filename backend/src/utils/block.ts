@@ -1,49 +1,39 @@
-import { ethers } from "ethers";
 import BlockClass from "../classes/Block";
-import { BlockType, EthereumTransaction } from "../types/block";
-import { getTotalGasUsed } from "./calc";
+import { EthereumTransaction, StoredBlock } from "../types/block";
+import { merkleRoot } from "./hash";
+import { totalGas } from "./transaction";
 
 export function createGenesisBlock(): BlockClass {
-  let genesisBlock = new BlockClass("Genesis block", "0");
-  genesisBlock.timestamp = Date.now();
-  genesisBlock.nonce = ethers.utils.hexlify(0);
-  genesisBlock.hash = genesisBlock.toHash();
-  return genesisBlock;
+  return new BlockClass({
+    number: 0,
+    timestamp: Date.now(),
+    previousHash: "0",
+    transactionsRoot: merkleRoot([]),
+    difficulty: 0,
+    data: "Genesis block",
+    gasUsed: "0",
+    transactions: [],
+    transactionsDetailed: [],
+  });
 }
 
-export function constructBlock(blockData: any): BlockClass {
-  let block = new BlockClass(blockData.data, blockData.previousHash);
-  block.timestamp = blockData.timestamp;
-  block.nonce = blockData.nonce;
-  block.hash = blockData.hash;
-  block.transactions = blockData.transactions;
-  block.transactionsDetailed = blockData.transactionsDetailed;
-  block.difficulty = blockData.difficulty;
-  block.gasLimit = blockData.gasLimit
-    ? ethers.BigNumber.from(blockData.gasLimit)
-    : ethers.BigNumber.from(0);
-  block.gasUsed = blockData.gasUsed
-    ? ethers.BigNumber.from(blockData.gasUsed)
-    : ethers.BigNumber.from(0);
-  block.miner = blockData.miner;
-  block.extraData = blockData.extraData;
-  return block;
+/** Rebuilds a block read from the database, keeping its stored nonce and hash. */
+export function constructBlock(stored: StoredBlock): BlockClass {
+  return new BlockClass(stored);
 }
 
-export function createNewBlock(
-  transactions: EthereumTransaction[],
-  previousHash: string,
-  blockNumber: number
-): BlockType {
-  const block = new BlockClass("", previousHash);
-  block.transactions = transactions.map((t) => t.hash || "");
-  block.transactionsDetailed = transactions;
-  block.number = blockNumber;
-  block.difficulty = 100;
-  block.gasLimit = ethers.BigNumber.from(5000000);
-  block.gasUsed = getTotalGasUsed(transactions);
-  block.miner = "0x1234567890abcdef";
-  block.extraData = "";
-
-  return block;
+/** An unmined block on top of `parent`; calculateProofOfWork then finds its nonce. */
+export function createNewBlock(transactions: EthereumTransaction[], parent: StoredBlock, difficulty: number): BlockClass {
+  const hashes = transactions.map((tx) => tx.hash);
+  return new BlockClass({
+    number: parent.number + 1,
+    timestamp: Date.now(),
+    previousHash: parent.hash,
+    transactionsRoot: merkleRoot(hashes),
+    difficulty,
+    data: "",
+    gasUsed: totalGas(transactions),
+    transactions: hashes,
+    transactionsDetailed: transactions,
+  });
 }

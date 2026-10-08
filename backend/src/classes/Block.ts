@@ -1,62 +1,54 @@
-import {
-  BlockType,
-  EthereumTransaction,
-} from "../types/block";
-import { ethers } from "ethers";
+import { EthereumTransaction, StoredBlock } from "../types/block";
+import { powHash, sealHash } from "../utils/hash";
 
-class Block implements BlockType {
-  static currentId = 0;
-  parentHash: string;
+class Block implements StoredBlock {
   number: number;
   timestamp: number;
-  nonce: string;
-  difficulty: number;
-  _difficulty: ethers.BigNumber;
-  gasLimit: ethers.BigNumber;
-  gasUsed: ethers.BigNumber;
-  miner: string;
-  extraData: string;
-  transactions: string[];
-  transactionsDetailed?: EthereumTransaction[];
-  data: string;
   previousHash: string;
+  transactionsRoot: string;
+  difficulty: number;
+  data: string;
+  nonce: string;
   hash: string;
+  gasUsed: string;
+  transactions: string[];
+  transactionsDetailed: EthereumTransaction[];
 
-  constructor(data: string, previousHash = "") {
-    this.nonce = "0";
-    this.transactions = [];
-    this.transactionsDetailed = [];
-    this.data = data;
-    this.previousHash = previousHash;
-    this.timestamp = Date.now();
-    this.parentHash = "";
-    this.number = 0;
-    this.difficulty = 0;
-    this._difficulty = ethers.BigNumber.from(0);
-    this.gasLimit = ethers.BigNumber.from(0);
-    this.gasUsed = ethers.BigNumber.from(0);
-    this.miner = "";
-    this.extraData = "";
-    this.hash = this.toHash();
+  constructor(fields: Omit<StoredBlock, "hash" | "nonce"> & { nonce?: string; hash?: string }) {
+    this.number = fields.number;
+    this.timestamp = fields.timestamp;
+    this.previousHash = fields.previousHash;
+    this.transactionsRoot = fields.transactionsRoot;
+    this.difficulty = fields.difficulty;
+    this.data = fields.data;
+    this.gasUsed = fields.gasUsed;
+    this.transactions = fields.transactions;
+    this.transactionsDetailed = fields.transactionsDetailed;
+    this.nonce = fields.nonce ?? "0x00";
+    this.hash = fields.hash ?? this.toHash();
+  }
+
+  sealHash(): string {
+    return sealHash(this);
   }
 
   toHash(): string {
-    const data = ethers.utils.defaultAbiCoder.encode(
-      ["uint", "string", "uint", "string"],
-      [this.timestamp, this.data, this.nonce, this.previousHash]
-    );
-    return ethers.utils.keccak256(data);
+    return powHash(this.sealHash(), this.nonce);
   }
 
-  toObject(): object {
+  toObject(): StoredBlock {
     return {
+      number: this.number,
+      timestamp: this.timestamp,
+      previousHash: this.previousHash,
+      transactionsRoot: this.transactionsRoot,
+      difficulty: this.difficulty,
+      data: this.data,
       nonce: this.nonce,
       hash: this.hash,
+      gasUsed: this.gasUsed,
       transactions: this.transactions,
       transactionsDetailed: this.transactionsDetailed,
-      data: this.data,
-      previousHash: this.previousHash,
-      timestamp: this.timestamp,
     };
   }
 }

@@ -1,63 +1,33 @@
-import CryptoJS from "crypto-js";
-import { Wallet, utils, ethers } from "ethers";
-import { EthereumTransaction } from "../types/block";
+import { Wallet, utils } from "ethers";
 
-// use on purpose to show how the eth addr are derived from pubKey
-export function getAddress(publicKey: Uint8Array): string {
-  const publicKeyHexString = Array.from(publicKey)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  const hashMsg = CryptoJS.SHA3(publicKeyHexString, { outputLength: 256 });
-  const last20ofHash = hashMsg.toString(CryptoJS.enc.Hex).slice(-40);
+/** Must match the node's chain id (backend/src/constants/tx.ts): it is part of every signature (EIP-155). */
+export const CHAIN_ID = 1337;
 
-  return `0x${last20ofHash}`;
+/**
+ * Done by hand on purpose, to show how an Ethereum address comes from a public key:
+ * keccak256 of the 64-byte public key (without its 0x04 prefix), keep the last 20 bytes,
+ * then apply the EIP-55 mixed-case checksum.
+ */
+export function getAddress(uncompressedPublicKey: string): string {
+  const hash = utils.keccak256(utils.hexDataSlice(uncompressedPublicKey, 1));
+  return utils.getAddress(utils.hexDataSlice(hash, 12));
 }
 
-export function hexStringToUint8Array(hexString: string) {
-  if (hexString.length % 2 !== 0) {
-    throw new Error("Invalid hexString");
-  }
-  var arrayBuffer = new Uint8Array(hexString.length / 2);
+/**
+ * Creates a fresh wallet in the browser and signs a transfer to another fresh wallet.
+ * Only the signed bytes are sent: the node recovers the sender from the signature.
+ */
+export const createTransaction = async (): Promise<string> => {
+  const sender = Wallet.createRandom();
+  const recipient = Wallet.createRandom();
 
-  for (var i = 0; i < hexString.length; i += 2) {
-    var byteValue = parseInt(hexString.substring(i, i+2), 16);
-    if (isNaN(byteValue)) {
-      throw new Error("Invalid hexString");
-    }
-    arrayBuffer[i / 2] = byteValue;
-  }
-
-  return arrayBuffer;
-}
-
-export function formatHash(hash: string): string {
-  const formattedHash: string = `${hash.slice(0, 6)}..${hash.slice(-3)}`;
-  return formattedHash;
-}
-
-export const createTransaction = async (): Promise<EthereumTransaction> => {
-  let wallet = Wallet.createRandom();
-  let inputPublicKey = wallet.publicKey;
-
-  let outputWallet;
-  do {
-    outputWallet = Wallet.createRandom();
-  } while (inputPublicKey === outputWallet.publicKey);
-
-  const txData = {
-    nonce: Math.floor(Math.random() * 1000),
+  return sender.signTransaction({
+    chainId: CHAIN_ID,
+    nonce: 0, // the sender's first transaction
     gasPrice: utils.parseUnits("20", "gwei"),
     gasLimit: 21000,
-    to: getAddress(hexStringToUint8Array(outputWallet.publicKey.slice(2))),
-    value: ethers.utils.parseEther((Math.random() * 10).toString()),
-    data: utils.hexlify([]),
-  };
-
-  const transaction = await wallet.signTransaction(txData);
-
-  return {
-    from: wallet.address,
-    ...txData,
-    id: utils.keccak256(transaction),
-  };
+    to: getAddress(recipient.publicKey),
+    value: utils.parseEther((0.01 + Math.random() * 9.99).toFixed(4)),
+    data: "0x",
+  });
 };

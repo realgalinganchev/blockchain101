@@ -14,7 +14,19 @@
 
 An educational blockchain application demonstrating proof-of-work mining, transactions, and real-time updates using Server-Sent Events (SSE).
 
-This project models the core mechanics of **Ethereum's Proof-of-Work consensus** (pre-Merge, pre-EIP-3675). It uses the same cryptographic primitives — **Keccak-256** hashing and **RLP encoding** — the same nonce-based mining loop, and a block structure mirroring Ethereum's (`nonce`, `previousHash`, `gasLimit`, `gasUsed`, `miner`, `timestamp`, `transactions`). Difficulty is represented as a leading-zero target on the hash, analogous to Ethereum's target threshold. The chain omits Ethash's DAG/epoch complexity and the P2P network layer, keeping the focus on the fundamental PoW mechanics.
+This project models the core mechanics of **Ethereum's Proof-of-Work consensus** (pre-Merge, pre-EIP-3675). It uses the same cryptographic primitives — **Keccak-256** hashing, **RLP-encoded, ECDSA-signed transactions** (EIP-155) — and the same nonce-based mining loop. Difficulty is represented as a leading-zero target on the hash, analogous to Ethereum's target threshold. The chain omits Ethash's DAG/epoch complexity, account balances and the P2P network layer, keeping the focus on the fundamental PoW mechanics.
+
+## 🔗 How the chain works
+
+**Transactions.** "Add transaction" creates two throwaway wallets in the browser and signs a legacy transfer from one to the other (chain id `1337`, sender nonce `0`). Only the raw signed bytes are sent. The node decodes them and **recovers the sender from the signature**, so nobody can submit a transaction for an address whose key they don't hold. It rejects unsigned or malformed transactions, other chain ids (EIP-155 replay protection), typed (EIP-1559) transactions, contract creation, gas below 21,000, duplicates, and nonces that aren't the sender's next one, which also stops a signed transaction from being replayed. The transaction hash is `keccak256(raw)`, as on Ethereum.
+
+**Blocks.** A block header holds `number`, `timestamp`, `previousHash`, `transactionsRoot` (a Merkle root of the transaction hashes), `difficulty` and `data`. Mining works like Ethash's seal: the header is hashed once (the *seal hash*), then the node tries nonces until `keccak256(sealHash ‖ nonce)` starts with `difficulty` zeros. Because the transactions root is in the header, changing, adding, removing or reordering any transaction changes the block hash, and with it the proof of work and the next block's `previousHash` link.
+
+**Validation.** Before a block is saved or appended, the node checks every signature against the stored fields, the transactions root, the hash, the proof of work, the parent link and the block number. The stored chain is re-checked on startup. Aborting or timing out a mining run leaves its transactions in the mempool.
+
+**Don't trust, verify.** The browser re-implements these rules and checks every block itself: the chain header shows the result, and each block's details list the checks. "Tamper with this block" edits a local copy so you can watch them fail. `scripts/verify-state.js` does the same independently in CI, and a deploy fails if the chain doesn't verify.
+
+**Live for everyone.** One Server-Sent Events stream (`/mining-progress`) carries mining progress plus `mining`, `block`, `mempool`, `difficulty` and `reset` events, so every open tab sees what other visitors do as it happens.
 
 ## 🏗️ Architecture
 
@@ -74,10 +86,11 @@ blockchain101/
 │   │   ├── classes/        # Block and Blockchain classes
 │   │   ├── constants/      # Configuration constants
 │   │   ├── routes/         # Express routes
-│   │   ├── services/       # Business logic (blockchain, db)
+│   │   ├── services/       # Business logic (blockchain, events, db stores)
 │   │   ├── types/          # TypeScript type definitions
-│   │   ├── utils/          # Helper functions
+│   │   ├── utils/          # Hashing, Merkle root, validation, tx decoding
 │   │   └── server.ts       # Express server entry point
+│   ├── test/               # Unit tests (node:test)
 │   ├── dist/               # Compiled JavaScript (build output)
 │   ├── Dockerfile          # Backend container definition
 │   ├── .dockerignore
@@ -131,7 +144,7 @@ blockchain101/
 - Node.js 18+
 - npm or yarn
 - Docker & Docker Compose (for containerized deployment)
-- Firebase project (for database)
+- Firebase project (optional: without credentials the backend keeps the chain in memory)
 
 ### Local Development (without Docker)
 
@@ -141,7 +154,7 @@ blockchain101/
    cd blockchain101
    ```
 
-2. **Set up Firebase**
+2. **Set up Firebase** (optional; skip it to run with an in-memory chain that resets on restart, or force that with `STORE=memory`)
    - Create a Firebase project
    - Download service account credentials
    - Create `backend/.env` file:
@@ -235,14 +248,14 @@ Or use the interactive playground:
 1. User opens browser → `http://localhost:9000`
 2. Nginx (frontend container) serves `index.html` + `bundle.js`
 3. React app loads in browser
-4. User clicks "Add Transaction"
-5. React sends `POST /api/transaction` (relative URL)
+4. User clicks "Add Transaction"; the browser signs a transfer with a fresh wallet
+5. React sends `POST /api/transaction` with `{ raw }` (relative URL)
 6. Nginx reverse-proxies `/api/*` → `http://backend:9001/*`
-7. Express backend receives request
-8. Backend saves to Firebase
-9. Backend returns JSON response
+7. Express backend decodes the transaction, recovers the sender and validates it
+8. Backend saves it to the mempool (Firestore)
+9. Backend returns the decoded transaction as JSON
 10. React updates UI
-11. SSE connection streams real-time mining progress
+11. The SSE connection streams mining progress and chain events to every open tab
 
 ## 📦 Docker Images
 
@@ -264,10 +277,10 @@ Or use the interactive playground:
 - **Runtime**: Node.js 18
 - **Language**: TypeScript
 - **Framework**: Express.js
-- **Database**: Firebase Firestore
+- **Database**: Firebase Firestore (in-memory store when no credentials are set)
+- **Tests**: `node:test` with `ts-node`
 - **Key Libraries**:
-  - `ethers.js` - Ethereum utilities
-  - `crypto-js` - Cryptographic functions
+  - `ethers.js` - transaction decoding and signature recovery, Keccak-256, ABI encoding
   - `cors` - Cross-origin resource sharing
 
 ### Frontend
@@ -275,9 +288,7 @@ Or use the interactive playground:
 - **Language**: TypeScript
 - **Build Tool**: Webpack
 - **Key Libraries**:
-  - `ethers.js` - Ethereum utilities (Keccak-256, RLP encoding)
-  - `elliptic` - Transaction signing (ECDSA / secp256k1)
-  - `crypto-js` - Cryptographic functions
+  - `ethers.js` - wallets, ECDSA (secp256k1) signing, RLP, Keccak-256; also verifies the chain in the browser
   - `react-dom` - React rendering
 
 ### DevOps
@@ -290,28 +301,30 @@ Or use the interactive playground:
 
 ## 🎯 Features
 
-- ✅ **Proof-of-Work Mining**: Adjustable difficulty (1-7 leading zeros)
-- ✅ **Real-time Mining Progress**: Server-Sent Events (SSE) for live updates
-- ✅ **Transaction Management**: Add transactions to mempool
-- ✅ **Block Explorer**: View entire blockchain
-- ✅ **Abort Mining**: Stop mining process mid-execution
-- ✅ **Persistent Storage**: Firebase Firestore integration
-- ✅ **Responsive UI**: Retro gaming aesthetic
+- ✅ **Proof-of-Work Mining**: Adjustable difficulty (1-7 leading zeros), Ethash-style seal hash + nonce
+- ✅ **Signed Transactions**: EIP-155 signatures, sender recovered and checked by the node, nonce and replay rules
+- ✅ **Merkle Transactions Root**: the block hash commits to every transaction
+- ✅ **Verification in the Browser**: every block re-checked client-side, with a tamper demo
+- ✅ **Block Explorer**: click any block or transaction for full details
+- ✅ **Real-time for Every Visitor**: SSE streams mining progress and chain events to all open tabs
+- ✅ **Abort Mining**: Stop mining mid-run without losing pending transactions
+- ✅ **Persistent Storage**: Firebase Firestore, or in memory for local development
+- ✅ **Responsive UI**: dark block-explorer design, keyboard accessible
 
 ## 📝 API Endpoints
 
 ### Blockchain
-- `GET /blockchain` - Fetch entire blockchain
-- `DELETE /blockchain` - Delete entire blockchain
+- `GET /blockchain` - The chain from genesis to tip
+- `DELETE /blockchain` - Reset to a fresh genesis block (admin token required in production)
 
 ### Transactions
-- `POST /transaction` - Add transaction to mempool
+- `POST /transaction` - Body `{ "raw": "0x…" }`, a signed legacy transaction for chain id 1337. Returns the decoded transaction (`201`), or `400` (invalid, wrong chain, bad nonce), `409` (duplicate) or `429` (mempool full) with `{ "error" }`
 - `GET /mempool` - Get all pending transactions
 
 ### Mining
-- `GET /mine` - Mine a new block
+- `GET /mine` - Mine a new block (`409` if one is already being mined)
 - `POST /abort-mining` - Stop current mining operation
-- `GET /mining-progress` - SSE endpoint for real-time mining updates
+- `GET /mining-progress` - SSE: progress as plain messages, plus named events `mining`, `block`, `mempool`, `difficulty`, `reset`
 - `GET /mining-state` - Get current mining state
 
 ### Configuration
@@ -326,6 +339,7 @@ cd backend
 npm run dev          # Start with nodemon + ts-node
 npm run build        # Compile TypeScript
 npm start            # Run compiled code
+npm test             # Unit tests (no Firebase needed)
 ```
 
 ### Frontend Development
@@ -464,7 +478,7 @@ npm test
 - `generate-transactions.js` — submits N transactions to the mempool
 - `mine-blocks.js` — mines N blocks
 - `populate-devnet.js` — full automation (transactions + mining)
-- `verify-state.js` — verifies block count, hashes, chain integrity
+- `verify-state.js` — recomputes signatures, transactions roots, hashes, proof of work and links; exits non-zero on any error
 
 ---
 
@@ -566,12 +580,21 @@ See `terraform/README.md` for full step-by-step instructions and cost details.
 ## 🧪 Testing
 
 ```bash
-# Blockchain state tests (requires devnet running)
+# Backend unit tests (run in CI): Merkle root, mining, signature checks,
+# nonce/replay rules, abort, tamper detection, reset
+cd backend
+npm test
+
+# Re-verify a running node independently: signatures, transactions roots,
+# hashes, proof of work and links (fails on any error; runs in CI:Deploy)
 cd scripts
+npm run verify
+
+# Blockchain state tests (requires devnet running)
 npm test
 ```
 
-Tests verify:
+The state tests verify:
 - Backend connectivity
 - Correct block count and genesis block
 - Chain integrity (each block links to previous)

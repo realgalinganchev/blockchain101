@@ -1,10 +1,16 @@
 import React from "react";
 import HashText from "./HashText";
 import { BlockType } from "../types/block";
+import { checksum, formatEth } from "../utils/format";
 
 interface BlockViewProps {
   block: BlockType;
   index: number;
+  onOpen: () => void;
+  /** just mined in this tab: briefly highlighted */
+  isNew?: boolean;
+  /** false when the browser's own verification of this block failed */
+  valid?: boolean;
 }
 
 const MAX_TX_SHOWN = 3;
@@ -19,15 +25,16 @@ export const timeAgo = (ms: number): string => {
   return `${Math.round(h / 24)}d ago`;
 };
 
-const BlockView: React.FC<BlockViewProps> = ({ block, index }) => {
+const BlockView: React.FC<BlockViewProps> = ({ block, index, onOpen, isNew = false, valid = true }) => {
   const txs = block.transactionsDetailed ?? [];
   const isGenesis = index === 0;
 
   return (
-    <article className={`block${isGenesis ? " block--genesis" : ""}`}>
+    <article className={`block block--clickable${isGenesis ? " block--genesis" : ""}${isNew ? " block--new" : ""}${valid ? "" : " block--invalid"}`}>
       <header className="block__head">
         <span className="block__height">#{index}</span>
         {isGenesis && <span className="badge">genesis</span>}
+        {!valid && <span className="badge badge--bad">invalid</span>}
         {block.timestamp ? (
           <time className="block__time" title={new Date(block.timestamp).toLocaleString()}>
             {timeAgo(block.timestamp)}
@@ -58,7 +65,12 @@ const BlockView: React.FC<BlockViewProps> = ({ block, index }) => {
         <ul className="block__txs">
           {txs.slice(0, MAX_TX_SHOWN).map((tx, i) => (
             <li key={tx.hash ?? i}>
-              <HashText hash={tx.hash} head={8} tail={4} />
+              <span className="block__tx-route">
+                <HashText hash={checksum(tx.from)} head={4} tail={4} zeros={false} />
+                <span className="tx__arrow">→</span>
+                <HashText hash={checksum(tx.to)} head={4} tail={4} zeros={false} />
+              </span>
+              <span className="block__tx-value">{formatEth(tx.value)}</span>
             </li>
           ))}
           {txs.length > MAX_TX_SHOWN && (
@@ -66,6 +78,11 @@ const BlockView: React.FC<BlockViewProps> = ({ block, index }) => {
           )}
         </ul>
       )}
+
+      {/* stretched over the whole card, so the card is one big, keyboard-reachable button */}
+      <button type="button" className="block__open" onClick={onOpen} aria-label={`Open block #${index}: ${txs.length} transaction${txs.length === 1 ? "" : "s"}${valid ? "" : ", failed verification"}`}>
+        View details <span aria-hidden>→</span>
+      </button>
     </article>
   );
 };

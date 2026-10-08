@@ -1,0 +1,50 @@
+# Routine dependency updates, batched into one PR per project per month.
+# Major versions are left out of these on purpose: those upgrades (Node 22, ethers v6,
+# React 19) are done deliberately. Security updates are separate (repo setting) and
+# still arrive for any version.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: monthly
+    groups:
+      backend:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: monthly
+    groups:
+      frontend:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /scripts
+    schedule:
+      interval: monthly
+    groups:
+      scripts:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Workflow actions, majors included: they're small and CI:Checks tests them
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

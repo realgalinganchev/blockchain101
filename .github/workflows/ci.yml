@@ -73,6 +73,11 @@ jobs:
             -v "$PWD/frontend/nginx.conf:/etc/nginx/templates/default.conf.template:ro" \
             -e BACKEND_HOST=backend -e BACKEND_RESOLVER=127.0.0.11 \
             nginx:alpine nginx -t
+      - name: Validate the Caddyfile
+        run: |
+          docker run --rm -e DOMAIN=example.com \
+            -v "$PWD/deploy/aws/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
   kubernetes:
     # The k8s/ manifests aren't deployed anywhere since the demo moved to AWS. This keeps
@@ -112,7 +117,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22 # the browser smoke test uses Node 22's built-in WebSocket
           cache: npm
           cache-dependency-path: scripts/package-lock.json
 
@@ -130,6 +135,24 @@ jobs:
           txs=$(curl -sf "$api/blockchain" | jq '[.[].transactions | length] | add')
           echo "Transactions in blocks: $txs"
           test "$txs" -eq 8
+
+      - name: Check security and cache headers
+        run: |
+          page=$(curl -sfI http://localhost:8080/)
+          for header in "content-security-policy: default-src 'self'" "x-content-type-options: nosniff" \
+                        "x-frame-options: DENY" "referrer-policy: strict-origin-when-cross-origin" \
+                        "permissions-policy: camera=()" "cache-control: no-cache"; do
+            grep -qi "^$header" <<< "$page" || { echo "missing on /: $header"; echo "$page"; exit 1; }
+          done
+          bundle=$(curl -sf http://localhost:8080/ | grep -o '/bundle\.[0-9a-f]*\.js' | head -1)
+          curl -sfI "http://localhost:8080$bundle" | grep -qi "^cache-control: public, max-age=31536000, immutable" \
+            || { echo "bundle $bundle isn't cached as immutable"; exit 1; }
+          echo "Headers OK on / and $bundle"
+
+      - name: Browser smoke test under the real CSP
+        # headless Chrome against the nginx image: add a transaction, mine it, open the
+        # block, tamper with it; fails on any CSP violation, exception or console error
+        run: cd scripts && node test/browser-smoke.mjs http://localhost:8080
 
       - name: Show cluster state on failure
         if: failure()

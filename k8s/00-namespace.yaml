@@ -1,0 +1,6 @@
+# Applied first (file order), so `kubectl apply -f k8s/` works on a fresh cluster.
+# The legacy DigitalOcean Terraform also creates it; applying it again is a no-op.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: blockchain101

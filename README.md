@@ -6,6 +6,7 @@
 ![Docker](https://img.shields.io/badge/docker-galinganchev%2Fblockchain101--*-blue?logo=docker)
 ![AWS](https://img.shields.io/badge/AWS-EC2%20%2B%20SSM-FF9900?logo=amazonwebservices)
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform)
+![Kubernetes](https://img.shields.io/badge/kubernetes-tested%20in%20CI%20%28kind%29-326CE5?logo=kubernetes)
 ![License](https://img.shields.io/badge/license-educational-green)
 
 **▶ Live demo: [blockchain101.founderexchange.co](https://blockchain101.founderexchange.co)** — add transactions, mine blocks and watch the nonce search stream in live. Runs on AWS, deployed by GitHub Actions; the demo chain resets every night. See [Production Deployment (AWS)](#%EF%B8%8F-production-deployment-aws).
@@ -134,7 +135,7 @@ blockchain101/
 │   ├── config.json
 │   └── package.json
 │
-├── k8s/                     # Legacy: Kubernetes manifests (DigitalOcean, no longer running)
+├── k8s/                     # Kubernetes manifests, deployed to a kind cluster in CI on every PR
 ├── terraform/               # Legacy: DigitalOcean Kubernetes cluster (no longer running)
 │
 ├── run.sh                   # Interactive playground CLI
@@ -300,7 +301,7 @@ Or use the interactive playground:
 - **Web Server**: Nginx (frontend + `/api` proxy), Caddy (HTTPS) in production
 - **CI/CD**: GitHub Actions (AWS access through OIDC, no stored AWS keys)
 - **IaC**: Terraform (AWS: EC2, IAM, SSM Parameter Store, budget alert; state in S3)
-- **Legacy**: DigitalOcean Kubernetes (DOKS) manifests and Terraform, no longer running
+- **Kubernetes**: manifests tested in CI on a throwaway kind cluster (the DigitalOcean cluster they used to run on is gone)
 
 ## 🎯 Features
 
@@ -378,7 +379,7 @@ Each submenu has numbered options — no need to remember commands.
 
 Three GitHub Actions workflows:
 
-- **CI:Checks** (`ci.yml`) runs on every PR and every push to `main`: backend build and unit tests, frontend type-check and build, `terraform fmt`/`validate`, the production compose file, `shellcheck` on the deploy script, and `nginx -t` on the frontend config.
+- **CI:Checks** (`ci.yml`) runs on every PR and every push to `main`: backend build and unit tests, frontend type-check and build, `terraform fmt`/`validate`, the production compose file, `shellcheck` on the deploy script, `nginx -t` on the frontend config, and a Kubernetes run: the `k8s/` manifests are deployed to a throwaway kind cluster with images built from the PR, then a chain is mined through the frontend's nginx proxy and verified with `verify-state.js --strict`.
 - **CI:Build** and **CI:Deploy** run when a PR with their label is **merged**. CI:Deploy also runs nightly (03:00 UTC) and on demand.
 
 ### CI:Build — Build and Push Docker Images
@@ -533,7 +534,9 @@ aws ssm start-session --target <instance_id>   # shell access without SSH
 
 ## ☸️ Legacy: Kubernetes Deployment (DigitalOcean)
 
-> **Not running.** The demo moved to AWS and the DOKS cluster was deleted in September 2026. The manifests in `k8s/` and the Terraform in `terraform/` are kept for reference and aren't maintained.
+> **Not deployed, but tested.** The demo moved to AWS and the DOKS cluster was deleted in September 2026. The `k8s/` manifests are still exercised on every PR: CI:Checks deploys them to a throwaway [kind](https://kind.sigs.k8s.io/) cluster, mines a chain through the frontend's nginx proxy and verifies it. The DigitalOcean Terraform in `terraform/` is kept for reference only.
+>
+> To try the manifests on any cluster: `kubectl apply -f k8s/00-namespace.yaml`, create the `firebase-credentials` secret (empty values run the chain in memory), then `kubectl apply -f k8s/`.
 
 The app used to deploy to **DigitalOcean Kubernetes Service (DOKS)**. Default config: 1 node, `s-1vcpu-2gb` size (~$12/mo), region `fra1` (Frankfurt).
 
@@ -946,7 +949,7 @@ Secret "firebase-credentials"           Backend Pod
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
 │  SOURCE CODE  (GitHub)                                                           │
-│  every PR: CI:Checks (build, type-check, tests, Terraform, compose, nginx)       │
+│  every PR: CI:Checks (build, type-check, tests, Terraform, compose, nginx, k8s)  │
 └──────────────────────────────┬───────────────────────────────────────────────────┘
                                │ merge with CI:Deploy label (or nightly / manual)
                                ▼

@@ -54,6 +54,7 @@ async function mineBlocks() {
   console.log(chalk.green(`  ✓ Blocks mined: ${successful}`));
   if (failed > 0) {
     console.log(chalk.red(`  ✗ Failed: ${failed}`));
+    process.exitCode = 1; // so populate-devnet (and CI) stop instead of building on a partial chain
   }
 
   // Check blockchain length

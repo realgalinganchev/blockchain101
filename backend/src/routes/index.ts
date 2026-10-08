@@ -1,40 +1,47 @@
 import { Router, Request, Response } from "express";
-import { addTransaction, mineBlock, mempool, getMempoolSize, getDifficulty, setDifficulty, addMiningProgressListener, removeMiningProgressListener, getMiningState, abortMining, resetBlockchain } from "../services/blockchain";
-import { db } from "../services/db/firebaseInit";
-import { BlockType } from "../types/block";
+import {
+  addTransaction,
+  mineBlock,
+  getChain,
+  getMempool,
+  getDifficulty,
+  setDifficulty,
+  getMiningState,
+  abortMining,
+  resetBlockchain,
+} from "../services/blockchain";
+import { subscribe } from "../services/events";
+import { TransactionError } from "../utils/transaction";
 import { limits, requireAdmin, MAX_DIFFICULTY, MAX_MEMPOOL } from "../middleware/security";
 
 const router = Router();
 
+// Body: { raw: "0x…" }, a signed legacy transaction. Answers with the decoded transaction.
 router.post("/transaction", limits.transaction, async (req: Request, res: Response) => {
-  if (MAX_MEMPOOL && getMempoolSize() >= MAX_MEMPOOL) {
+  if (MAX_MEMPOOL && getMempool().length >= MAX_MEMPOOL) {
     res.status(429).json({ error: "The mempool is full. Mine a block to make room." });
     return;
   }
   try {
-    await addTransaction(req.body);
-    res.sendStatus(200);
+    const tx = await addTransaction(req.body?.raw);
+    res.status(201).json(tx);
   } catch (error: any) {
+    if (error instanceof TransactionError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
     console.error("Error adding transaction:", error);
-    res.status(500).json({ error: error.toString() });
+    res.status(500).json({ error: "Could not add the transaction." });
   }
 });
 
-router.get("/blockchain", async (_req: Request, res: Response) => {
-  try {
-    const blocksSnapshot = await db.collection("blockchain").get();
-    const blocks: BlockType[] = [];
-    blocksSnapshot.forEach((doc) => {
-      blocks.push(doc.data() as BlockType);
-    });
-    res.json(blocks);
-  } catch (error: any) {
-    res.status(500).json({ error: error.toString() });
-  }
+// The chain from genesis to tip, served from memory (it is loaded from the store on start).
+router.get("/blockchain", (_req: Request, res: Response) => {
+  res.json(getChain());
 });
 
-router.get("/mempool", (req, res) => {
-  res.json(mempool);
+router.get("/mempool", (_req: Request, res: Response) => {
+  res.json(getMempool());
 });
 
 router.get("/mine", limits.mine, async (_req: Request, res: Response) => {
@@ -53,35 +60,18 @@ router.get("/mine", limits.mine, async (_req: Request, res: Response) => {
       res.status(503).json({ error: "Mining took too long and was stopped. Try a lower difficulty." });
     } else {
       console.error("Error mining block:", error);
-      res.status(500).json({ error: error.toString() });
+      res.status(500).json({ error: "Mining failed." });
     }
   }
 });
 
 router.delete("/blockchain", limits.control, requireAdmin, async (_req: Request, res: Response) => {
   try {
-    // Delete blockchain from Firebase
-    const blocksSnapshot = await db.collection("blockchain").get();
-    const blocksBatch = db.batch();
-    blocksSnapshot.docs.forEach((doc) => {
-      blocksBatch.delete(doc.ref);
-    });
-    await blocksBatch.commit();
-
-    // Delete mempool from Firebase
-    const mempoolSnapshot = await db.collection("mempool").get();
-    const mempoolBatch = db.batch();
-    mempoolSnapshot.docs.forEach((doc) => {
-      mempoolBatch.delete(doc.ref);
-    });
-    await mempoolBatch.commit();
-
-    // Reset in-memory state and create fresh genesis block
     await resetBlockchain();
-
     res.sendStatus(200);
   } catch (error: any) {
-    res.status(500).json({ error: error.toString() });
+    console.error("Error resetting the chain:", error);
+    res.status(500).json({ error: "Could not reset the chain." });
   }
 });
 
@@ -99,32 +89,36 @@ router.post("/difficulty", limits.control, (req: Request, res: Response) => {
   }
 });
 
+// Server-Sent Events for every viewer: mining progress as plain messages, plus named
+// events when mining starts or stops, a block is mined, the mempool changes or the
+// chain is reset, so all open tabs stay in sync.
 router.get("/mining-progress", (req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("X-Accel-Buffering", "no"); // Disable buffering in nginx
 
-  // Disable compression for this route
   res.socket?.setNoDelay(true);
   res.socket?.setTimeout(0);
 
   // Send initial comment to establish connection
   res.write(": connected\n\n");
+  if (getMiningState().isMining) res.write(`event: mining\ndata: ${JSON.stringify({ active: true })}\n\n`);
 
-  const listener = (hash: string, nonce: number) => {
-    res.write(`data: ${JSON.stringify({ hash, nonce })}\n\n`);
-  };
-
-  addMiningProgressListener(listener);
+  const unsubscribe = subscribe((event) => {
+    if (event.type === "progress") {
+      res.write(`data: ${JSON.stringify({ hash: event.hash, nonce: event.nonce })}\n\n`);
+    } else {
+      res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    }
+  });
 
   // Keep idle streams open through the Caddy/nginx proxies (they drop silent connections).
   const keepAlive = setInterval(() => res.write(": ping\n\n"), 25_000);
 
   req.on("close", () => {
     clearInterval(keepAlive);
-    removeMiningProgressListener(listener);
+    unsubscribe();
   });
 });
 

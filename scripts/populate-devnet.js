@@ -4,6 +4,7 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
 import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
 
 // Load config
 const config = JSON.parse(readFileSync(new URL('./config.json', import.meta.url)));
@@ -23,9 +24,10 @@ const difficulty = parseInt(options.difficulty);
 
 function runScript(scriptName, args) {
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptName, ...args], {
+    // Same Node binary, and a cwd that is also valid on Windows (file:///C:/... URLs)
+    const child = spawn(process.execPath, [scriptName, ...args.map(String)], {
       stdio: 'inherit',
-      cwd: import.meta.url.replace('file://', '').replace('/populate-devnet.js', '')
+      cwd: fileURLToPath(new URL('.', import.meta.url))
     });
 
     child.on('close', code => {

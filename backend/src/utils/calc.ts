@@ -1,68 +1,57 @@
-import { ethers } from "ethers";
+import { utils } from "ethers";
 import BlockClass from "../classes/Block";
-import { TARGET_DIFFICULTY } from "../constants/tx";
-import { BlockType, EthereumTransaction } from "../types/block";
 
-export function getTotalGasUsed(
-  transactions: EthereumTransaction[]
-): ethers.BigNumber {
-  return ethers.BigNumber.from(
-    transactions
-      .map((tx) => ethers.BigNumber.from(tx.gasLimit))
-      .reduce((sum, gasLimit) => sum.add(gasLimit), ethers.BigNumber.from(0))
-  );
-}
+/** How often mining progress is reported; every attempt would flood the SSE stream. */
+const PROGRESS_INTERVAL_MS = 100;
 
-export function toHexString(value: ethers.BigNumberish | undefined): string {
-  if (value === undefined) {
-    throw new Error("Value is undefined");
-  }
-
-  return typeof value === "string"
-    ? value
-    : ethers.BigNumber.from(value).toHexString();
-}
-
+/**
+ * Proof of work: tries nonces 0, 1, 2, … until keccak256(sealHash ‖ nonce) starts with
+ * `block.difficulty` zeros. The seal hash is computed once; each attempt only rewrites
+ * the 32 nonce bytes. Mines in 10 ms slices and yields in between, so the server keeps
+ * answering requests and streaming progress.
+ */
 export async function calculateProofOfWork(
-  block: BlockType,
-  difficulty: number = 4,
+  block: BlockClass,
   onProgress?: (hash: string, nonce: number) => void,
   shouldAbort?: () => boolean
-): Promise<BlockType> {
+): Promise<BlockClass> {
+  const target = "0x" + "0".repeat(block.difficulty);
+  const input = new Uint8Array(64);
+  input.set(utils.arrayify(block.sealHash()), 0);
+  const nonceView = new DataView(input.buffer, 32, 32);
+  let lastReport = 0;
   let n = 0;
-  const target = "0x" + "0".repeat(difficulty);
 
   return new Promise((resolve, reject) => {
     const mine = () => {
-      // Check if mining should be aborted
-      if (shouldAbort && shouldAbort()) {
-        console.log("Mining aborted by user");
+      if (shouldAbort?.()) {
         reject(new Error("Mining aborted"));
         return;
       }
 
-      const startTime = Date.now();
+      const sliceEnd = Date.now() + 10;
+      let hash = "";
+      while (Date.now() < sliceEnd) {
+        for (let i = 0; i < 256; i++, n++) {
+          // nonce as a 32-byte big-endian number (fits in the last 8 bytes)
+          nonceView.setUint32(24, Math.floor(n / 2 ** 32));
+          nonceView.setUint32(28, n >>> 0);
+          hash = utils.keccak256(input);
 
-      // Mine for up to 10ms at a time, then yield control
-      while (Date.now() - startTime < 10) {
-        block.nonce = ethers.utils.hexlify(n);
-        block.hash = block.toHash();
-
-        // Report progress on every iteration
-        if (onProgress) {
-          onProgress(block.hash, n);
+          if (hash.startsWith(target)) {
+            block.nonce = utils.hexlify(n);
+            block.hash = hash;
+            onProgress?.(hash, n);
+            resolve(block);
+            return;
+          }
         }
-
-        if (block.hash.startsWith(target)) {
-          // Don't update timestamp after finding valid hash - it would change the hash!
-          resolve(block);
-          return;
+        if (onProgress && Date.now() - lastReport >= PROGRESS_INTERVAL_MS) {
+          lastReport = Date.now();
+          onProgress(hash, n - 1);
         }
-
-        n++;
       }
 
-      // Yield control to allow SSE messages to be flushed
       setImmediate(mine);
     };
 

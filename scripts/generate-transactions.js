@@ -3,7 +3,9 @@ import axios from 'axios';
 import { program } from 'commander';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
-import { randomBytes } from 'crypto';
+import { ethers } from 'ethers';
+
+const { Wallet, utils } = ethers;
 
 // Load config
 const config = JSON.parse(readFileSync(new URL('./config.json', import.meta.url)));
@@ -17,23 +19,25 @@ const options = program.opts();
 const backendUrl = options.url;
 const count = parseInt(options.number);
 
-// Generate random Ethereum-like address
-function generateAddress() {
-  return '0x' + randomBytes(20).toString('hex');
-}
+// The node only accepts transactions signed for its chain id (EIP-155), see backend/src/constants/tx.ts
+const CHAIN_ID = 1337;
 
-// Generate random transaction
-function generateTransaction() {
-  return {
-    id: randomBytes(16).toString('hex'),
-    from: generateAddress(),
-    to: generateAddress(),
-    value: Math.floor(Math.random() * 1000000000000), // Max ~0.000001 ETH in wei
+const randomBetween = (min, max) => min + Math.random() * (max - min);
+
+// A transfer signed by a fresh wallet, as the frontend does: the node recovers the
+// sender from the signature, and a new wallet's first transaction has nonce 0.
+async function generateTransaction() {
+  const sender = Wallet.createRandom();
+  const raw = await sender.signTransaction({
+    chainId: CHAIN_ID,
+    nonce: 0,
+    to: Wallet.createRandom().address,
+    value: utils.parseEther(randomBetween(0.01, 5).toFixed(4)),
     gasLimit: 21000, // Standard gas limit for ETH transfer
-    gasPrice: Math.floor(Math.random() * 100000000), // Max 100 Gwei
-    nonce: Math.floor(Math.random() * 100),
+    gasPrice: utils.parseUnits(randomBetween(10, 60).toFixed(1), 'gwei'),
     data: '0x'
-  };
+  });
+  return { raw };
 }
 
 async function generateTransactions() {
@@ -44,7 +48,7 @@ async function generateTransactions() {
 
   for (let i = 0; i < count; i++) {
     try {
-      const transaction = generateTransaction();
+      const transaction = await generateTransaction();
       await axios.post(`${backendUrl}/transaction`, transaction);
       successful++;
       console.log(chalk.green(`✓ Transaction ${i + 1}/${count} added`));

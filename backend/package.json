@@ -7,7 +7,7 @@
     "start": "node dist/server.js",
     "dev": "nodemon -x \"ts-node src/server.ts\"",
     "build": "tsc",
-    "test": "echo \"No test specified\" && exit 0"
+    "test": "node --require ts-node/register/transpile-only --test test/hash.test.ts test/transaction.test.ts test/chain.test.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

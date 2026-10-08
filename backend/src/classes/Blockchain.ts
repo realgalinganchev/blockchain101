@@ -1,23 +1,23 @@
-import { BlockType } from "../types/block";
+import Block from "./Block";
+import { validateBlock } from "../utils/validate";
 
 class Blockchain {
-  chain: BlockType[];
+  chain: Block[] = [];
   static instance = new Blockchain();
 
-  constructor(initialChain: BlockType[] = []) {
-    this.chain = initialChain;
-  }
-
-  addBlock(newBlock: BlockType) {
-    if (this.chain.length > 0) {
-      newBlock.previousHash = this.getLatestBlock().hash;
-    }
-    newBlock.hash = newBlock.toHash();
-    this.chain.push(newBlock);
-  }
-
-  getLatestBlock(): BlockType {
+  getLatestBlock(): Block {
     return this.chain[this.chain.length - 1];
+  }
+
+  /** Throws unless `block` is valid on top of the current tip. */
+  assertCanAppend(block: Block) {
+    const problems = validateBlock(block, this.getLatestBlock());
+    if (problems.length) throw new Error(`Invalid block #${block.number}: ${problems.join("; ")}`);
+  }
+
+  addBlock(block: Block) {
+    this.assertCanAppend(block);
+    this.chain.push(block);
   }
 }
 

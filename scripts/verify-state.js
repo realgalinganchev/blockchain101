@@ -3,6 +3,9 @@ import axios from 'axios';
 import { program } from 'commander';
 import chalk from 'chalk';
 import { readFileSync } from 'fs';
+import { ethers } from 'ethers';
+
+const { utils, constants } = ethers;
 
 // Load config
 const config = JSON.parse(readFileSync(new URL('./config.json', import.meta.url)));
@@ -17,6 +20,55 @@ const options = program.opts();
 const backendUrl = options.url;
 const minBlocks = parseInt(options.minBlocks);
 const strict = options.strict;
+
+// Independent re-implementation of the node's rules (backend/src/utils/hash.ts and
+// validate.ts), so this check doesn't just trust the API's own answers.
+function merkleRoot(hashes) {
+  if (hashes.length === 0) return constants.HashZero;
+  let level = hashes;
+  while (level.length > 1) {
+    const next = [];
+    for (let i = 0; i < level.length; i += 2) {
+      next.push(utils.keccak256(utils.concat([level[i], level[i + 1] ?? level[i]])));
+    }
+    level = next;
+  }
+  return level[0];
+}
+
+function blockHash(block) {
+  const seal = utils.keccak256(
+    utils.defaultAbiCoder.encode(
+      ['uint256', 'uint256', 'string', 'bytes32', 'uint8', 'string'],
+      [block.number, block.timestamp, block.previousHash, block.transactionsRoot, block.difficulty, block.data]
+    )
+  );
+  return utils.keccak256(utils.concat([seal, utils.hexZeroPad(block.nonce, 32)]));
+}
+
+// Problems with one block's contents: signatures, transactions root, hash and proof of work
+function checkBlockContents(block, index) {
+  const problems = [];
+  const txs = block.transactionsDetailed ?? [];
+  txs.forEach((tx, t) => {
+    try {
+      const signed = utils.parseTransaction(tx.raw);
+      if (signed.hash !== tx.hash) problems.push(`tx ${t + 1}: hash isn't keccak256 of the signed bytes`);
+      if (signed.from !== tx.from) problems.push(`tx ${t + 1}: sender doesn't match the signature`);
+      if (signed.to.toLowerCase() !== tx.to.toLowerCase() || signed.value.toString() !== tx.value) {
+        problems.push(`tx ${t + 1}: recipient or value doesn't match what was signed`);
+      }
+    } catch {
+      problems.push(`tx ${t + 1}: not a valid signed transaction`);
+    }
+  });
+  if (merkleRoot(txs.map((tx) => tx.hash)) !== block.transactionsRoot) problems.push("transactions root doesn't match");
+  if (blockHash(block) !== block.hash) problems.push("hash doesn't match the header and nonce");
+  if (index > 0 && !block.hash.startsWith('0x' + '0'.repeat(block.difficulty))) {
+    problems.push(`hash doesn't meet difficulty ${block.difficulty}`);
+  }
+  return problems;
+}
 
 let errors = [];
 let warnings = [];
@@ -104,20 +156,18 @@ async function verifyState() {
     const difficultyResponse = await axios.get(`${backendUrl}/difficulty`);
     console.log(chalk.white(`  Current difficulty: ${difficultyResponse.data.difficulty}`));
 
-    // Verify hashes
-    let validHashes = 0;
-    let invalidHashes = 0;
+    // Recompute every block: signatures, transactions root, hash, proof of work
+    let invalidBlocks = 0;
     blocks.forEach((block, i) => {
-      if (block.hash && block.hash.startsWith('0x')) {
-        validHashes++;
-      } else {
-        invalidHashes++;
-        addError(`Block ${i} has invalid hash format: ${block.hash}`);
+      const problems = checkBlockContents(block, i);
+      if (problems.length) {
+        invalidBlocks++;
+        problems.forEach((problem) => addError(`Block ${i}: ${problem}`));
       }
     });
 
-    if (invalidHashes === 0 && blocks.length > 0) {
-      addSuccess('All block hashes are valid');
+    if (invalidBlocks === 0 && blocks.length > 0) {
+      addSuccess('Every block recomputes: signatures, transactions roots, hashes and proof of work');
     }
 
     // Summary

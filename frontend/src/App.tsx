@@ -4,6 +4,9 @@ import BlockView, { timeAgo } from "./components/BlockView";
 import HashText from "./components/HashText";
 import { createTransaction } from "./utils/calc";
 import MempoolView from "./components/MempoolView";
+import BlockModal from "./components/BlockModal";
+import Modal from "./components/Modal";
+import TxDetails from "./components/TxDetails";
 import { useFetchData } from "./hooks/useFetchData";
 import { BlockType, EthereumTransaction } from "./types/block";
 
@@ -27,6 +30,11 @@ const App = () => {
   const [blocks, setBlocks] = useState<BlockType[]>([]);
   const [mempool, setMempool] = useState<EthereumTransaction[]>([]);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
+
+  // Detail modals: a block by its height, or a pending transaction from the mempool
+  const [openBlock, setOpenBlock] = useState<number | null>(null);
+  const [openTx, setOpenTx] = useState<EthereumTransaction | null>(null);
+  const [newBlockHash, setNewBlockHash] = useState<string | null>(null);
 
   const fetchBlockchain = useFetchData(`${API_URL}/blockchain`, setBlocks);
   const fetchMempool = useFetchData(`${API_URL}/mempool`, setMempool);
@@ -110,6 +118,8 @@ const App = () => {
         difficulty: difficulty
       });
       setShowSuccessPopup(true);
+      setNewBlockHash(data.hash);
+      setTimeout(() => setNewBlockHash((hash) => (hash === data.hash ? null : hash)), 6000);
 
       // Hide popup after 3 seconds
       setTimeout(() => {
@@ -231,6 +241,10 @@ const App = () => {
   const target = "0".repeat(difficulty);
   const liveHex = currentMiningHash.replace(/^0x/, "");
   const matched = (liveHex.match(/^0*/) ?? [""])[0].length;
+  const openBlockByHash = (hash: string) => {
+    const index = sortedBlocks.findIndex((b) => b.hash === hash);
+    if (index >= 0) setOpenBlock(index);
+  };
 
   return (
     <div className="page">
@@ -330,12 +344,14 @@ const App = () => {
           </div>
         </section>
 
-        <MempoolView mempool={mempool} isLoading={isLoadingTx} />
+        <MempoolView mempool={mempool} isLoading={isLoadingTx} onOpen={setOpenTx} />
       </main>
 
       <section className="card chain">
         <header className="card__head">
-          <h2>Chain</h2>
+          <h2>
+            Chain <span className="card__sub">click a block to see its transactions</span>
+          </h2>
           <span className="count">
             {sortedBlocks.length} blocks
             <button className="btn-link" onClick={deleteBlockchain} disabled={isDeleting}>
@@ -345,7 +361,13 @@ const App = () => {
         </header>
         <div className="chain__scroll" ref={chainRef}>
           {sortedBlocks.map((block: BlockType, index: number) => (
-            <BlockView key={block.hash ?? index} block={block} index={index} />
+            <BlockView
+              key={block.hash ?? index}
+              block={block}
+              index={index}
+              isNew={!!newBlockHash && block.hash === newBlockHash}
+              onOpen={() => setOpenBlock(index)}
+            />
           ))}
           {isLoadingBlock && (
             <article className="block block--mining">
@@ -376,7 +398,21 @@ const App = () => {
             {lastMiningTime !== null && <> · {(lastMiningTime / 1000).toFixed(2)}s</>}
           </div>
           <HashText hash={successData.hash} head={10} tail={6} />
+          <button type="button" className="toast__action" onClick={() => openBlockByHash(successData.hash)}>
+            View block →
+          </button>
         </div>
+      )}
+
+      {openBlock !== null && (
+        <BlockModal blocks={sortedBlocks} index={openBlock} onNavigate={setOpenBlock} onClose={() => setOpenBlock(null)} />
+      )}
+
+      {openTx && (
+        <Modal title="Pending transaction" onClose={() => setOpenTx(null)}>
+          <TxDetails tx={openTx} />
+          <p className="note">It leaves the mempool when a miner includes it in a block. Mine one to see where it lands.</p>
+        </Modal>
       )}
     </div>
   );

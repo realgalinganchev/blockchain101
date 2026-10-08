@@ -16,6 +16,7 @@
   --radius: 14px;
   --radius-sm: 9px;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark; /* dark native scrollbars */
 }
 
 * {
@@ -209,6 +210,13 @@ a {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.card__sub {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--faint);
 }
 
 .count {
@@ -453,6 +461,32 @@ a {
   color: var(--muted);
 }
 
+.tx--button {
+  width: 100%;
+  appearance: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.tx--button:hover {
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tx__value {
+  margin-left: auto;
+  font: 12px var(--mono);
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+
+.tx__value + .pill {
+  margin-left: 0;
+}
+
 .pill {
   margin-left: auto;
   font-size: 11px;
@@ -612,6 +646,358 @@ a {
   color: var(--muted);
 }
 
+.block__txs li {
+  display: flex;
+  flex-direction: column;
+}
+
+.block__tx-route {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.block__tx-value {
+  font: 11px var(--mono);
+  color: var(--accent-2);
+}
+
+/* the whole card opens the block modal (see .block__open::after) */
+.block--clickable {
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.block--clickable:hover {
+  border-color: rgba(139, 123, 255, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.block__open {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-top: 12px;
+  color: var(--accent);
+  font: 600 12px Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.block__open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+}
+
+.block__open:focus-visible {
+  outline: none;
+}
+
+.block__open:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.block--clickable:hover .block__open {
+  text-decoration: underline;
+}
+
+.block--new {
+  border-color: rgba(62, 230, 168, 0.7);
+  animation: block-new 1.6s ease-out 3;
+}
+
+@keyframes block-new {
+  from {
+    box-shadow: 0 0 0 0 rgba(62, 230, 168, 0.55);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgba(62, 230, 168, 0);
+  }
+}
+
+/* ---------- modal ---------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: rgba(3, 5, 10, 0.72);
+  backdrop-filter: blur(4px);
+  animation: fade-in 0.15s ease-out;
+}
+
+.modal__dialog {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  background: #0d111a;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  animation: modal-in 0.18s ease-out;
+}
+
+.modal__dialog:focus {
+  outline: none;
+}
+
+.modal__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #0d111a;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal__title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.modal__body {
+  padding: 8px 20px 22px;
+}
+
+.modal__section {
+  margin: 22px 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.icon-btn {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.icon-btn:focus-visible,
+.chip:focus-visible,
+.copy:focus-visible,
+.tx--button:focus-visible,
+.tx-row__head:focus-visible,
+.toast__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* key / value rows */
+.kv {
+  margin: 0;
+}
+
+.kv > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.kv > div:last-child {
+  border-bottom: 0;
+}
+
+.kv dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.kv dd {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.kv .pill {
+  margin-left: 0;
+}
+
+.hash--full {
+  white-space: normal;
+  word-break: break-all;
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.zero {
+  color: var(--zero);
+}
+
+.copy {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: 11px Inter, system-ui, sans-serif;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+
+.copy:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.chip {
+  appearance: none;
+  border: 1px solid rgba(139, 123, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(139, 123, 255, 0.12);
+  color: var(--accent);
+  font: 600 11px var(--mono);
+  padding: 2px 9px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: rgba(139, 123, 255, 0.22);
+}
+
+.note {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  background: rgba(139, 123, 255, 0.06);
+  border: 1px solid rgba(139, 123, 255, 0.18);
+  border-radius: var(--radius-sm);
+}
+
+.pill--ok {
+  color: var(--zero);
+  background: rgba(62, 230, 168, 0.1);
+  border: 1px solid rgba(62, 230, 168, 0.3);
+}
+
+/* expandable transactions inside a block */
+.tx-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tx-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.tx-row.is-open {
+  border-color: var(--border-strong);
+}
+
+.tx-row__head {
+  width: 100%;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.tx-row__head:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tx-row__route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tx-row__value {
+  margin-left: auto;
+  font: 600 13px var(--mono);
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+
+.chevron {
+  color: var(--faint);
+  transition: transform 0.15s;
+}
+
+.tx-row.is-open .chevron {
+  transform: rotate(180deg);
+}
+
+.tx-row__body {
+  padding: 2px 14px 6px;
+  border-top: 1px solid var(--border);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
 /* ---------- toast + footer ---------- */
 
 .toast {
@@ -638,6 +1024,23 @@ a {
   font-size: 13px;
   color: var(--muted);
   margin: 2px 0 6px;
+}
+
+.toast__action {
+  display: block;
+  margin-top: 10px;
+  appearance: none;
+  border: 1px solid rgba(62, 230, 168, 0.35);
+  border-radius: 8px;
+  background: rgba(62, 230, 168, 0.1);
+  color: var(--zero);
+  font: 600 13px Inter, system-ui, sans-serif;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.toast__action:hover {
+  background: rgba(62, 230, 168, 0.18);
 }
 
 @keyframes toast-in {
@@ -682,5 +1085,35 @@ a {
   }
   .tx {
     flex-wrap: wrap;
+  }
+  .modal {
+    padding: 12px;
+  }
+  .modal__dialog {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+  .modal__head,
+  .modal__body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .kv > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal,
+  .modal__dialog,
+  .block--new,
+  .toast {
+    animation: none;
+  }
+  .block--clickable,
+  .block--clickable:hover {
+    transform: none;
+    transition: none;
   }
 }

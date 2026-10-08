@@ -109,7 +109,8 @@ const verdictIs = (expected) => {
 const cspViolations = () => window.__csp;
 
 const click = (selector, text = "") => inPage(clickElement, selector, text);
-const oneLine = (text) => String(text).replace(/[\r\n]+/g, " ");
+// Browser messages are page-controlled: drop line breaks so they can't forge log lines
+const oneLine = (text) => String(text).replace(/\n|\r/g, "");
 
 const steps = [
   ["the chain loads and verifies in the browser", () => waitFor("the chain to verify", 30000, chainVerified)],

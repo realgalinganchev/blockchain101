@@ -94,7 +94,9 @@ router.post("/difficulty", limits.control, (req: Request, res: Response) => {
 // chain is reset, so all open tabs stay in sync.
 router.get("/mining-progress", (req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
+  // no-transform: compressing proxies (webpack-dev-server, gzip/zstd encoders) would
+  // otherwise buffer the stream and hold events back
+  res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no"); // Disable buffering in nginx
 

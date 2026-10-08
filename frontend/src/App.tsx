@@ -9,10 +9,16 @@ import Modal from "./components/Modal";
 import TxDetails from "./components/TxDetails";
 import { useFetchData } from "./hooks/useFetchData";
 import { BlockType, EthereumTransaction } from "./types/block";
+import { verifyChain } from "./utils/verify";
 
 const BUTTON_CLICK_SOUND = new Audio("/addSound.mp3");
 const MINE_BUTTON_SOUND = new Audio("/mineSound.mp3");
 const API_URL = process.env.BACKEND_API_URL || "/api";
+
+// play() rejects when the browser blocks audio; the sound is optional
+const play = (sound: HTMLAudioElement) => {
+  sound.play().catch(() => undefined);
+};
 
 const App = () => {
   const [isLoadingTx, setIsLoadingTx] = useState(false);
@@ -29,7 +35,8 @@ const App = () => {
 
   const [blocks, setBlocks] = useState<BlockType[]>([]);
   const [mempool, setMempool] = useState<EthereumTransaction[]>([]);
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  // A block is being mined by anyone (this tab or another visitor), as announced over SSE
+  const [remoteMining, setRemoteMining] = useState(false);
 
   // Detail modals: a block by its height, or a pending transaction from the mempool
   const [openBlock, setOpenBlock] = useState<number | null>(null);
@@ -54,34 +61,54 @@ const App = () => {
     fetchDifficulty();
   }, [fetchDifficulty]);
 
-  // Set up persistent SSE connection on mount
+  // One SSE stream for everything live: mining progress arrives as plain messages, and
+  // named events keep this tab in sync with what every other visitor does.
   React.useEffect(() => {
     const es = new EventSource(`${API_URL}/mining-progress`);
-
-    es.onopen = () => {
-      console.log("Persistent SSE opened!");
+    const refresh = () => {
+      fetchBlockchain();
+      fetchMempool();
     };
+    const on = <T,>(type: string, handler: (data: T) => void) =>
+      es.addEventListener(type, (event) => {
+        try {
+          handler(JSON.parse((event as MessageEvent).data));
+        } catch (err) {
+          console.error(`Bad ${type} event:`, err);
+        }
+      });
 
     es.onmessage = (event) => {
       try {
         const { hash, nonce } = JSON.parse(event.data);
         setCurrentMiningHash(hash);
         setCurrentNonce(nonce);
+        setRemoteMining(true);
       } catch (err) {
         console.error("Parse error:", err);
       }
     };
+    on<{ active: boolean }>("mining", ({ active }) => {
+      setRemoteMining(active);
+      if (!active) {
+        setCurrentMiningHash("");
+        setCurrentNonce(0);
+      }
+    });
+    on("block", refresh);
+    on("mempool", fetchMempool);
+    on("reset", refresh);
+    on<{ difficulty: number }>("difficulty", ({ difficulty }) => setDifficultyState(difficulty));
 
-    es.onerror = (error) => {
-      console.error("Persistent SSE error:", error);
+    // EventSource reconnects by itself; catch up on anything missed while disconnected
+    let connectedBefore = false;
+    es.onopen = () => {
+      if (connectedBefore) refresh();
+      connectedBefore = true;
     };
 
-    setEventSource(es);
-
-    return () => {
-      es.close();
-    };
-  }, []);
+    return () => es.close();
+  }, [fetchBlockchain, fetchMempool]);
 
   // Keep the newest block in view as the chain grows
   const chainRef = React.useRef<HTMLDivElement>(null);
@@ -92,7 +119,7 @@ const App = () => {
 
   const mineBlock = async () => {
     setIsLoadingBlock(true);
-    MINE_BUTTON_SOUND.play();
+    play(MINE_BUTTON_SOUND);
 
     const abortController = new AbortController();
     setMiningAbortController(abortController);
@@ -115,13 +142,13 @@ const App = () => {
       setSuccessData({
         nonce: data.nonce,
         hash: data.hash,
-        difficulty: difficulty
+        difficulty: data.difficulty ?? difficulty,
       });
       setShowSuccessPopup(true);
       setNewBlockHash(data.hash);
       setTimeout(() => setNewBlockHash((hash) => (hash === data.hash ? null : hash)), 6000);
 
-      // Hide popup after 3 seconds
+      // Hide popup after 5 seconds
       setTimeout(() => {
         setShowSuccessPopup(false);
       }, 5000);
@@ -162,27 +189,28 @@ const App = () => {
   };
 
   const addTransaction = async () => {
-    BUTTON_CLICK_SOUND.play();
+    play(BUTTON_CLICK_SOUND);
     setIsLoadingTx(true);
 
     try {
-      const transactionToSend: EthereumTransaction = await createTransaction();
+      // Signed here, in the browser; the node recovers the sender from the signature
+      const raw = await createTransaction();
       const response = await fetch(`${API_URL}/transaction`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(transactionToSend),
+        body: JSON.stringify({ raw }),
       });
-
-
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(data.error ?? `HTTP ${response.status}`);
       }
 
-      setMempool((prevMempool) => [...prevMempool, transactionToSend]);
-    } catch (error) {
-      alert(`Error adding transaction: ${error}`);
+      const tx = data as EthereumTransaction;
+      setMempool((prev) => (prev.some((t) => t.hash === tx.hash) ? prev : [...prev, tx]));
+    } catch (error: any) {
+      alert(`Could not add the transaction: ${error.message ?? error}`);
     } finally {
       setIsLoadingTx(false);
     }
@@ -204,8 +232,8 @@ const App = () => {
         alert(data.error ?? `Reset failed (HTTP ${response.status})`);
         return;
       }
-      setBlocks([]);
-      setMempool([]);
+      fetchBlockchain();
+      fetchMempool();
     } catch (error) {
       console.error("Error deleting blockchain:", error);
     } finally {
@@ -235,7 +263,11 @@ const App = () => {
       });
   };
 
-  const sortedBlocks = [...blocks].sort((a, b) => a.timestamp - b.timestamp);
+  const sortedBlocks = React.useMemo(() => [...blocks].sort((a, b) => a.number - b.number || a.timestamp - b.timestamp), [blocks]);
+  // Every block re-checked in the browser: signatures, transactions root, hash, proof of work, links
+  const blockValid = React.useMemo(() => verifyChain(sortedBlocks).map((checks) => checks.every((c) => c.ok)), [sortedBlocks]);
+  const firstInvalid = blockValid.indexOf(false);
+  const someoneMining = isLoadingBlock || remoteMining;
   const height = Math.max(sortedBlocks.length - 1, 0);
   const latest = sortedBlocks[sortedBlocks.length - 1];
   const target = "0".repeat(difficulty);
@@ -264,8 +296,9 @@ const App = () => {
       <section className="hero">
         <h1>Mine a block, <span className="accent">live</span>.</h1>
         <p>
-          Add signed transactions to the mempool, then mine. The node searches for a nonce until the block's
-          Keccak-256 hash starts with the target number of zeros: proof of work, as Ethereum did it before the Merge.
+          Sign transactions with throwaway wallets in your browser, then mine them into a block. The node searches for a
+          nonce until the block's Keccak-256 hash starts with the target number of zeros: proof of work, as Ethereum did it
+          before the Merge. Open any block to check it yourself.
         </p>
         <div className="stats">
           <div className="stat"><span className="stat__label">Height</span><span className="stat__value">{height}</span></div>
@@ -299,7 +332,7 @@ const App = () => {
                   aria-checked={difficulty === d}
                   className={`segmented__item${difficulty === d ? " is-active" : ""}`}
                   onClick={() => handleDifficultyChange(d)}
-                  disabled={isLoadingBlock}
+                  disabled={someoneMining}
                 >
                   {d}
                 </button>
@@ -307,10 +340,10 @@ const App = () => {
             </div>
           </div>
 
-          {isLoadingBlock ? (
+          {someoneMining ? (
             <div className="mining">
               <div className="mining__row">
-                <span className="pulse" /> Mining block #{height + 1}
+                <span className="pulse" /> {isLoadingBlock ? "Mining" : "Another visitor is mining"} block #{height + 1}
               </div>
               <div className="mining__nonce">{currentNonce.toLocaleString()}</div>
               <div className="mining__label">nonces tried</div>
@@ -337,8 +370,8 @@ const App = () => {
                 ■ Stop mining
               </button>
             ) : (
-              <button className="btn btn--primary" onClick={mineBlock}>
-                ⛏ Mine block
+              <button className="btn btn--primary" onClick={mineBlock} disabled={remoteMining}>
+                {remoteMining ? "Waiting for that block…" : "⛏ Mine block"}
               </button>
             )}
           </div>
@@ -353,6 +386,11 @@ const App = () => {
             Chain <span className="card__sub">click a block to see its transactions</span>
           </h2>
           <span className="count">
+            {sortedBlocks.length > 0 && (
+              <span className={`check ${firstInvalid < 0 ? "check--ok" : "check--bad"}`}>
+                {firstInvalid < 0 ? "✓ verified in your browser" : `✗ block #${firstInvalid} fails verification`}
+              </span>
+            )}
             {sortedBlocks.length} blocks
             <button className="btn-link" onClick={deleteBlockchain} disabled={isDeleting}>
               reset
@@ -366,10 +404,11 @@ const App = () => {
               block={block}
               index={index}
               isNew={!!newBlockHash && block.hash === newBlockHash}
+              valid={blockValid[index]}
               onOpen={() => setOpenBlock(index)}
             />
           ))}
-          {isLoadingBlock && (
+          {someoneMining && (
             <article className="block block--mining">
               <header className="block__head">
                 <span className="block__height">#{height + 1}</span>
@@ -395,7 +434,13 @@ const App = () => {
           <div className="toast__title">Block mined</div>
           <div className="toast__body">
             nonce {parseInt(successData.nonce, 16).toLocaleString()} · difficulty {successData.difficulty}
-            {lastMiningTime !== null && <> · {(lastMiningTime / 1000).toFixed(2)}s</>}
+            {lastMiningTime ? (
+              <>
+                {" "}
+                · {(lastMiningTime / 1000).toFixed(2)}s · ≈{" "}
+                {Math.round((parseInt(successData.nonce, 16) + 1) / (lastMiningTime / 1000)).toLocaleString()} hashes/s
+              </>
+            ) : null}
           </div>
           <HashText hash={successData.hash} head={10} tail={6} />
           <button type="button" className="toast__action" onClick={() => openBlockByHash(successData.hash)}>

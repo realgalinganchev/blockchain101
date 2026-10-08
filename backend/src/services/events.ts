@@ -4,6 +4,7 @@ export type ChainEvent =
   | { type: "mining"; active: boolean }
   | { type: "block"; number: number; hash: string }
   | { type: "mempool"; size: number }
+  | { type: "difficulty"; difficulty: number }
   | { type: "reset" };
 
 type Listener = (event: ChainEvent) => void;

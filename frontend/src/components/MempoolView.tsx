@@ -24,12 +24,12 @@ const MempoolView: React.FC<MempoolViewProps> = ({ mempool, isLoading, onOpen })
     ) : (
       <ul className="tx-list">
         {mempool.map((tx, i) => (
-          <li key={tx.id ?? i}>
+          <li key={tx.hash ?? i}>
             <button type="button" className="tx tx--button" onClick={() => onOpen(tx)} aria-label={`Open pending transaction ${i + 1}`}>
               <span className="tx__index">{i + 1}</span>
               <HashText hash={checksum(tx.from)} head={6} tail={4} zeros={false} />
               <span className="tx__arrow">→</span>
-              <HashText hash={checksum(tx.to as string | undefined)} head={6} tail={4} zeros={false} />
+              <HashText hash={checksum(tx.to)} head={6} tail={4} zeros={false} />
               <span className="tx__value">{formatEth(tx.value)}</span>
               <span className="pill pill--pending">pending</span>
             </button>

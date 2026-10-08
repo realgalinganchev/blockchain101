@@ -603,6 +603,16 @@ a {
   padding: 1px 8px;
 }
 
+.badge--bad {
+  color: var(--danger);
+  background: rgba(255, 107, 122, 0.1);
+  border-color: rgba(255, 107, 122, 0.4);
+}
+
+.block--invalid {
+  border-color: rgba(255, 107, 122, 0.6);
+}
+
 .badge--live {
   color: var(--zero);
   background: rgba(62, 230, 168, 0.1);
@@ -855,6 +865,12 @@ a {
   margin-left: 0;
 }
 
+/* explanations next to monospace values read as prose */
+.kv .muted {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+}
+
 .hash--full {
   white-space: normal;
   word-break: break-all;
@@ -907,6 +923,87 @@ a {
   background: rgba(139, 123, 255, 0.06);
   border: 1px solid rgba(139, 123, 255, 0.18);
   border-radius: var(--radius-sm);
+}
+
+.small {
+  font-size: 12px;
+}
+
+/* verification results */
+.check {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.check--ok {
+  color: var(--zero);
+}
+
+.check--bad {
+  color: var(--danger);
+}
+
+.checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.checks li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.checks li.is-bad {
+  border-color: rgba(255, 107, 122, 0.45);
+  background: rgba(255, 107, 122, 0.06);
+}
+
+.checks__mark {
+  font-weight: 700;
+  color: var(--zero);
+}
+
+.checks li.is-bad .checks__mark {
+  color: var(--danger);
+}
+
+.tamper {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tamper p {
+  margin: 0;
+  flex: 1;
+}
+
+.tamper.is-on {
+  border-color: rgba(255, 107, 122, 0.45);
+  background: rgba(255, 107, 122, 0.05);
+  color: var(--text);
+}
+
+.tamper__btn {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  font-size: 13px;
 }
 
 .pill--ok {
@@ -1101,6 +1198,10 @@ a {
   .kv > div {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+  .tamper {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

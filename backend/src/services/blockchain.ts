@@ -135,6 +135,7 @@ async function removeTransactionsFromMempool(transactions: EthereumTransaction[]
 
 export function setDifficulty(difficulty: number) {
   currentDifficulty = difficulty;
+  publish({ type: "difficulty", difficulty });
 }
 
 export function getDifficulty(): number {

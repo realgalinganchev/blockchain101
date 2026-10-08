@@ -3,6 +3,7 @@ import HashText from "./HashText";
 import CopyButton from "./CopyButton";
 import { EthereumTransaction } from "../types/block";
 import { checksum, formatEth, formatGwei, maxFee, toBigNumber } from "../utils/format";
+import { checkTransaction } from "../utils/verify";
 
 interface TxDetailsProps {
   tx: EthereumTransaction;
@@ -11,21 +12,18 @@ interface TxDetailsProps {
 }
 
 const TxDetails: React.FC<TxDetailsProps> = ({ tx, blockHeight }) => {
-  // `id` is keccak256 of the signed transaction (its Ethereum hash). The pre-mined
-  // demo transactions only have a random id, so fall back to the node's hash for them.
-  const txHash = /^0x[0-9a-f]{64}$/i.test(tx.id ?? "") ? tx.id : tx.hash;
   const from = checksum(tx.from);
-  const to = checksum(tx.to as string | undefined);
+  const to = checksum(tx.to);
   const gasLimit = toBigNumber(tx.gasLimit);
-  const data = typeof tx.data === "string" ? tx.data : undefined;
+  const signatureProblem = checkTransaction(tx);
 
   return (
     <dl className="kv">
       <div>
         <dt>Tx hash</dt>
         <dd>
-          <HashText hash={txHash} full zeros={false} />
-          <CopyButton value={txHash} label="Copy tx hash" />
+          <HashText hash={tx.hash} full zeros={false} />
+          <CopyButton value={tx.hash} label="Copy tx hash" />
         </dd>
       </div>
       <div>
@@ -57,6 +55,18 @@ const TxDetails: React.FC<TxDetailsProps> = ({ tx, blockHeight }) => {
         <dd className="mono strong">{formatEth(tx.value, 6)}</dd>
       </div>
       <div>
+        <dt>Signature</dt>
+        <dd>
+          {signatureProblem ? (
+            <span className="check check--bad">✗ {signatureProblem}</span>
+          ) : (
+            <span className="check check--ok">
+              ✓ valid <span className="muted">(checked in your browser: the sender is recovered from the signature)</span>
+            </span>
+          )}
+        </dd>
+      </div>
+      <div>
         <dt>Gas price</dt>
         <dd className="mono">{formatGwei(tx.gasPrice)}</dd>
       </div>
@@ -72,18 +82,34 @@ const TxDetails: React.FC<TxDetailsProps> = ({ tx, blockHeight }) => {
       </div>
       <div>
         <dt>Sender nonce</dt>
-        <dd className="mono">{tx.nonce !== undefined ? String(toBigNumber(tx.nonce) ?? tx.nonce) : "—"}</dd>
+        <dd className="mono">
+          {tx.nonce} <span className="muted">(how many transactions the sender sent before this one)</span>
+        </dd>
+      </div>
+      <div>
+        <dt>Chain id</dt>
+        <dd className="mono">
+          {tx.chainId} <span className="muted">(signed in, so the signature is useless on other chains: EIP-155)</span>
+        </dd>
       </div>
       <div>
         <dt>Data</dt>
         <dd className="mono">
-          {!data || data === "0x" ? (
+          {!tx.data || tx.data === "0x" ? (
             <>
               0x <span className="muted">(empty: a plain ETH transfer)</span>
             </>
           ) : (
-            <span className="hash hash--full">{data}</span>
+            <span className="hash hash--full">{tx.data}</span>
           )}
+        </dd>
+      </div>
+      <div>
+        <dt>Signed bytes</dt>
+        <dd>
+          <HashText hash={tx.raw} head={16} tail={8} zeros={false} />
+          <CopyButton value={tx.raw} label="Copy raw signed transaction" />
+          <span className="muted small">{tx.raw ? `${(tx.raw.length - 2) / 2} bytes, RLP-encoded` : ""}</span>
         </dd>
       </div>
     </dl>

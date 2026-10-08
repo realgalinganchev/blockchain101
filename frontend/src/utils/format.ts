@@ -50,10 +50,7 @@ export const maxFee = (tx: EthereumTransaction): BigNumber | null => {
 export const sumValues = (txs: EthereumTransaction[]): BigNumber =>
   txs.reduce((sum, tx) => sum.add(toBigNumber(tx.value) ?? 0), BigNumber.from(0));
 
-export const sumGas = (txs: EthereumTransaction[]): BigNumber =>
-  txs.reduce((sum, tx) => sum.add(toBigNumber(tx.gasLimit) ?? 0), BigNumber.from(0));
-
-/** EIP-55 mixed-case address; recipients are derived by hand in calc.ts and come out lowercase. */
+/** EIP-55 mixed-case address, whatever case the input uses. */
 export const checksum = (address?: string): string | undefined => {
   if (!address) return address;
   try {

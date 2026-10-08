@@ -6,7 +6,10 @@ module.exports = {
   entry: "./src/index.tsx",
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "bundle.js",
+    // A new name whenever the code changes, so browsers never run a stale cached app
+    filename: "bundle.[contenthash:8].js",
+    publicPath: "/",
+    clean: true,
   },
   resolve: {
     extensions: [".tsx", ".ts", ".js"],

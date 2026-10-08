@@ -66,3 +66,10 @@ jobs:
           docker compose config --quiet
       - name: Shellcheck the deploy script
         run: shellcheck deploy/aws/deploy.sh
+      - name: Validate the frontend nginx config
+        # the image renders templates/*.template with envsubst, as in production, then nginx -t
+        run: |
+          docker run --rm \
+            -v "$PWD/frontend/nginx.conf:/etc/nginx/templates/default.conf.template:ro" \
+            -e BACKEND_HOST=backend -e BACKEND_RESOLVER=127.0.0.11 \
+            nginx:alpine nginx -t

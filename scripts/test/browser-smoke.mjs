@@ -67,66 +67,85 @@ function send(method, params = {}) {
   return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
 }
 
-async function evaluate(expression) {
-  const { result, exceptionDetails } = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+// Runs a function in the page. Arguments travel as protocol values and are never
+// spliced into code, so nothing here builds JavaScript from strings.
+async function inPage(fn, ...args) {
+  const { result: global } = await send("Runtime.evaluate", { expression: "globalThis" });
+  const { result, exceptionDetails } = await send("Runtime.callFunctionOn", {
+    objectId: global.objectId,
+    functionDeclaration: fn.toString(),
+    arguments: args.map((value) => ({ value })),
+    awaitPromise: true,
+    returnByValue: true,
+  });
   if (exceptionDetails) throw new Error(exceptionDetails.exception?.description ?? exceptionDetails.text);
   return result.value;
 }
 
-async function waitFor(what, expression, timeoutMs = 30000) {
+async function waitFor(what, timeoutMs, fn, ...args) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await evaluate(expression)) return;
+    if (await inPage(fn, ...args)) return;
     await sleep(200);
   }
   throw new Error(`timed out waiting for ${what}`);
 }
 
-const click = (selector, text = "") =>
-  evaluate(`(() => {
-    const el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.textContent.includes(${JSON.stringify(text)}));
-    if (!el) throw new Error(${JSON.stringify(`nothing to click: ${selector} ${text}`)});
-    el.click();
-  })()`);
+// Page-side helpers: serialized into the page, so they only use the page's globals.
+function clickElement(selector, text) {
+  const el = [...document.querySelectorAll(selector)].find((e) => e.textContent.includes(text));
+  if (!el) throw new Error(`nothing to click: ${selector} ${text}`);
+  el.click();
+}
+const chainVerified = () => document.querySelector(".chain .check")?.textContent.includes("verified");
+const bodyBackground = () => getComputedStyle(document.body).backgroundColor;
+const hasPending = () => document.querySelectorAll(".tx--button").length > 0;
+const blockCount = () => document.querySelectorAll(".block__open").length;
+const minedPast = (before) => document.querySelectorAll(".block__open").length > before && !!document.querySelector(".toast__action");
+const verdictIs = (expected) => {
+  const verdict = document.querySelector(".modal__section .check")?.textContent ?? "";
+  return expected === "valid" ? verdict.includes("valid") && !verdict.includes("invalid") : verdict.includes(expected);
+};
+const cspViolations = () => window.__csp;
 
-const blockCount = "document.querySelectorAll('.block__open').length";
-const verdict = "(document.querySelector('.modal__section .check')?.textContent ?? '')";
+const click = (selector, text = "") => inPage(clickElement, selector, text);
+const oneLine = (text) => String(text).replace(/[\r\n]+/g, " ");
 
 const steps = [
-  ["the chain loads and verifies in the browser", () => waitFor("the chain to verify", "document.querySelector('.chain .check')?.textContent.includes('verified')")],
+  ["the chain loads and verifies in the browser", () => waitFor("the chain to verify", 30000, chainVerified)],
   [
     "the stylesheet applies",
     async () => {
-      if ((await evaluate("getComputedStyle(document.body).backgroundColor")) === "rgba(0, 0, 0, 0)") throw new Error("no styles applied");
+      if ((await inPage(bodyBackground)) === "rgba(0, 0, 0, 0)") throw new Error("no styles applied");
     },
   ],
   [
     "a signed transaction reaches the mempool",
     async () => {
       await click("button", "Add transaction");
-      await waitFor("a pending transaction", "document.querySelectorAll('.tx--button').length > 0");
+      await waitFor("a pending transaction", 30000, hasPending);
     },
   ],
   [
     "mining puts it in a new block",
     async () => {
-      const before = await evaluate(blockCount);
+      const before = await inPage(blockCount);
       await click("button", "Mine block");
-      await waitFor("the new block", `${blockCount} > ${before} && !!document.querySelector('.toast__action')`, 90000);
+      await waitFor("the new block", 90000, minedPast, before);
     },
   ],
   [
     "the new block opens and verifies",
     async () => {
       await click(".toast__action");
-      await waitFor("a valid verdict", `${verdict}.includes('valid') && !${verdict}.includes('invalid')`);
+      await waitFor("a valid verdict", 30000, verdictIs, "valid");
     },
   ],
   [
     "tampering with it is detected",
     async () => {
       await click(".tamper__btn", "Tamper");
-      await waitFor("an invalid verdict", `${verdict}.includes('invalid')`);
+      await waitFor("an invalid verdict", 30000, verdictIs, "invalid");
     },
   ],
 ];
@@ -146,13 +165,13 @@ try {
     await run();
     console.log(`✓ ${name}`);
   }
-  for (const violation of await evaluate("window.__csp")) problems.push(`CSP: ${violation}`);
+  for (const violation of await inPage(cspViolations)) problems.push(`CSP: ${violation}`);
 } catch (error) {
   failed = true;
-  console.error(`✗ ${error.message}`);
+  console.error(`✗ ${oneLine(error.message)}`);
 }
 
-problems.forEach((problem) => console.error(`✗ ${problem}`));
+problems.forEach((problem) => console.error(`✗ ${oneLine(problem)}`));
 console.log(failed || problems.length ? "Browser smoke test failed" : "Browser smoke test passed: no CSP violations, exceptions or console errors");
 socket?.close();
 chrome.kill();

@@ -49,7 +49,7 @@ This project models the core mechanics of **Ethereum's Proof-of-Work consensus**
 - **Mining shares the API's event loop.** It yields every 10 ms, but the hashing still competes with requests for CPU. *Next:* move it to a worker thread.
 - **A single replica.** Chain state lives in the backend process. Scaling out needs shared state and one elected miner.
 - **Legacy transactions only.** No EIP-1559 fees and no contract calls (no EVM).
-- **Frontend tests and observability.** There are no browser tests yet, no metrics or structured logs, and the health checks reuse `/mempool`.
+- **Frontend tests and observability.** One browser smoke test runs in CI, but there are no component tests, no metrics or structured logs, and the health checks reuse `/mempool`.
 - **Toolchain.** Node 18 (end-of-life) and ethers v5. Node 22 and ethers v6 (or viem) are next.
 
 ## 🏗️ Architecture
@@ -400,10 +400,12 @@ Each submenu has numbered options — no need to remember commands.
 
 ## ⚙️ CI/CD Workflows
 
-Three GitHub Actions workflows:
+Four GitHub Actions workflows, plus Dependabot:
 
-- **CI:Checks** (`ci.yml`) runs on every PR and every push to `main`: backend build and unit tests, frontend type-check and build, `terraform fmt`/`validate`, the production compose file, `shellcheck` on the deploy script, `nginx -t` on the frontend config, and a Kubernetes run: the `k8s/` manifests are deployed to a throwaway kind cluster with images built from the PR, then a chain is mined through the frontend's nginx proxy and verified with `verify-state.js --strict`.
+- **CI:Checks** (`ci.yml`) runs on every PR and every push to `main`: backend build and unit tests, frontend type-check and build, `terraform fmt`/`validate`, the production compose file, `shellcheck` on the deploy script, `nginx -t` on the frontend config, `caddy validate` on the production Caddyfile, and a Kubernetes run: the `k8s/` manifests are deployed to a throwaway kind cluster with images built from the PR, a chain is mined through the frontend's nginx proxy and verified with `verify-state.js --strict`, the security and cache headers are checked, and a headless-Chrome smoke test drives the app under its real CSP.
+- **CodeQL** (`codeql.yml`) scans the TypeScript and the workflows on every PR, on `main`, and weekly (`security-extended` queries); results appear on PRs and in the Security tab.
 - **CI:Build** and **CI:Deploy** run when a PR with their label is **merged**. CI:Deploy also runs nightly (03:00 UTC) and on demand.
+- **Dependabot** (`.github/dependabot.yml`) opens one grouped PR a month per npm project and for the workflow actions (minor and patch versions; majors are upgraded deliberately). Dependabot alerts and security updates are on, so vulnerable dependencies get a fix PR whatever the version.
 
 ### CI:Build — Build and Push Docker Images
 
@@ -539,6 +541,7 @@ visitor ──HTTPS──▶ Caddy (auto Let's Encrypt) ──▶ nginx frontend
 | Mempool | capped at 100 pending transactions (`MAX_MEMPOOL`) |
 | Rate limits | per-IP limits on mining, transactions and control endpoints; `TRUST_PROXY_HOPS=2` so limits see the visitor behind Caddy → nginx |
 | Payloads | JSON bodies capped at 16 KB |
+| Security headers | CSP (`script-src 'self'`, no eval; inline styles only, for style-loader), `nosniff`, `X-Frame-Options: DENY`, Referrer- and Permissions-Policy from nginx; HSTS from Caddy |
 
 **Provision it yourself:**
 
@@ -632,6 +635,11 @@ npm run verify
 
 # Blockchain state tests (requires devnet running)
 npm test
+
+# Browser smoke test: headless Chrome, real headers and CSP; add a transaction, mine,
+# open the block, tamper with it; fails on any CSP violation or console error
+# (Node 22+, Chrome; CHROME_PATH if it isn't google-chrome. Runs in CI against kind)
+npm run test:browser -- http://localhost:9000
 ```
 
 The state tests verify:
@@ -1103,7 +1111,7 @@ K8s rolling update:
 
 ## Security — Where Secrets Live (and where they don't)
 
-Every secret is injected at runtime. Nothing is baked into images or committed to git.
+Every secret is injected at runtime. Nothing is baked into images or committed to git. GitHub secret scanning with push protection is on, so a commit containing a credential is blocked before it lands.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐

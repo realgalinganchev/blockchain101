@@ -1,7 +1,12 @@
 # Caddy obtains and renews the Let's Encrypt certificate for $DOMAIN automatically
 # once the DNS record points at this host. Server-Sent Events are streamed unbuffered.
+# HSTS lives here because Caddy terminates HTTPS; the other security headers come from
+# the frontend's nginx, so they apply locally and in Kubernetes too.
 {$DOMAIN} {
 	encode zstd gzip
 	reverse_proxy frontend:80
-	header -Server
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
 }

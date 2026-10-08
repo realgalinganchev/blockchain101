@@ -8,7 +8,8 @@
     "mine-blocks": "node mine-blocks.js",
     "populate": "node populate-devnet.js -t 8 -b 3 -d 2",
     "verify": "node verify-state.js --strict",
-    "test": "node test/blockchain-state.test.js"
+    "test": "node test/blockchain-state.test.js",
+    "test:browser": "node test/browser-smoke.mjs"
   },
   "dependencies": {
     "axios": "^1.6.0",

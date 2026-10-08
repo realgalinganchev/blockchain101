@@ -1,16 +1,17 @@
 # Blockchain 101
 
+![CI:Checks](https://img.shields.io/github/actions/workflow/status/realgalinganchev/blockchain101/ci.yml?label=CI%3AChecks&branch=main)
 ![CI:Build](https://img.shields.io/github/actions/workflow/status/realgalinganchev/blockchain101/build.yml?label=CI%3ABuild&branch=main)
 ![CI:Deploy](https://img.shields.io/github/actions/workflow/status/realgalinganchev/blockchain101/deploy.yml?label=CI%3ADeploy&branch=main)
-![Docker](https://img.shields.io/badge/docker-galinganchev%2Fblockchain101-blue?logo=docker)
+![Docker](https://img.shields.io/badge/docker-galinganchev%2Fblockchain101--*-blue?logo=docker)
 ![AWS](https://img.shields.io/badge/AWS-EC2%20%2B%20SSM-FF9900?logo=amazonwebservices)
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform)
-![Kubernetes](https://img.shields.io/badge/kubernetes-DOKS-326CE5?logo=kubernetes)
+![Kubernetes](https://img.shields.io/badge/kubernetes-tested%20in%20CI%20%28kind%29-326CE5?logo=kubernetes)
 ![License](https://img.shields.io/badge/license-educational-green)
 
 **▶ Live demo: [blockchain101.founderexchange.co](https://blockchain101.founderexchange.co)** — add transactions, mine blocks and watch the nonce search stream in live. Runs on AWS, deployed by GitHub Actions; the demo chain resets every night. See [Production Deployment (AWS)](#%EF%B8%8F-production-deployment-aws).
 
-[![blockchain101 mining a block live: nonce counter, hash leading zeros against the target, mempool and linked chain](frontend/public/og.png)](https://blockchain101.founderexchange.co)
+[![blockchain101: signing two transactions, mining them into a block live, then tampering with the block and watching the browser's checks fail](docs/demo.gif)](https://blockchain101.founderexchange.co)
 
 An educational blockchain application demonstrating proof-of-work mining, transactions, and real-time updates using Server-Sent Events (SSE).
 
@@ -20,7 +21,7 @@ This project models the core mechanics of **Ethereum's Proof-of-Work consensus**
 
 **Transactions.** "Add transaction" creates two throwaway wallets in the browser and signs a legacy transfer from one to the other (chain id `1337`, sender nonce `0`). Only the raw signed bytes are sent. The node decodes them and **recovers the sender from the signature**, so nobody can submit a transaction for an address whose key they don't hold. It rejects unsigned or malformed transactions, other chain ids (EIP-155 replay protection), typed (EIP-1559) transactions, contract creation, gas below 21,000, duplicates, and nonces that aren't the sender's next one, which also stops a signed transaction from being replayed. The transaction hash is `keccak256(raw)`, as on Ethereum.
 
-**Blocks.** A block header holds `number`, `timestamp`, `previousHash`, `transactionsRoot` (a Merkle root of the transaction hashes), `difficulty` and `data`. Mining works like Ethash's seal: the header is hashed once (the *seal hash*), then the node tries nonces until `keccak256(sealHash ‖ nonce)` starts with `difficulty` zeros. Because the transactions root is in the header, changing, adding, removing or reordering any transaction changes the block hash, and with it the proof of work and the next block's `previousHash` link.
+**Blocks.** A block header holds `number`, `timestamp`, `previousHash`, `transactionsRoot` (a Merkle root of the transaction hashes), `difficulty` and `data`. Mining works like Ethash's seal: the header is hashed once (the *seal hash*), then the node tries nonces until `keccak256(sealHash ‖ nonce)` starts with `difficulty` zeros. Because the transactions root is in the header, changing, adding, removing or reordering any transaction changes the block hash, and with it the proof of work and the next block's `previousHash` link. Hashing only the seal hash and nonce per attempt gives about 300k hashes/s on one laptop core, 17× more than ABI-encoding the whole header for every attempt.
 
 **Validation.** Before a block is saved or appended, the node checks every signature against the stored fields, the transactions root, the hash, the proof of work, the parent link and the block number. The stored chain is re-checked on startup. Aborting or timing out a mining run leaves its transactions in the mempool.
 
@@ -28,7 +29,32 @@ This project models the core mechanics of **Ethereum's Proof-of-Work consensus**
 
 **Live for everyone.** One Server-Sent Events stream (`/mining-progress`) carries mining progress plus `mining`, `block`, `mempool`, `difficulty` and `reset` events, so every open tab sees what other visitors do as it happens.
 
+## ⚖️ Design decisions and trade-offs
+
+- **Ethereum's real primitives, not toy ones.** Keccak-256, RLP and EIP-155 signatures through ethers, so a transaction hash or a recovered sender here is computed exactly as on Ethereum. *Trade-off:* proof of work is a leading-zeros target instead of Ethash's DAG, and there is no EVM.
+- **A Merkle root over a list, not a Patricia trie.** A binary Merkle tree is enough to commit a block to its transactions, and would support inclusion proofs (not exposed yet). Ethereum's trie also indexes account state, which this chain doesn't have.
+- **Seal hash + nonce.** The header is hashed once per block, and each attempt only hashes it together with the nonce. That's 17× more attempts per second than re-encoding the header each time.
+- **The chain lives in memory, Firestore keeps the durable copy.** Reads come from memory: ordered, fast, and no database read per request, so the free tier stays free. Firestore persists blocks and the mempool across restarts, behind a small `Store` interface that swaps in an in-memory store for local development and tests. *Trade-off:* state lives in one process, so the backend runs as a single replica.
+- **Server-Sent Events, not WebSockets.** Updates only flow from server to browser; writes are ordinary POSTs. SSE is plain HTTP, reconnects by itself and passes through nginx and Caddy unchanged. *Gotcha:* compressing proxies buffer the stream, hence `Cache-Control: no-transform`.
+- **One EC2 host with Docker Compose, not Kubernetes.** One small host runs a demo of this size for about $14/month including HTTPS (Caddy, Let's Encrypt). A managed cluster costs more (a node plus a load balancer per service) and adds nothing at one replica. The Kubernetes manifests stay tested in CI on kind.
+- **No long-lived credentials.** GitHub deploys through OIDC, the host is reached through SSM (no SSH, port 22 closed), and secrets live in SSM Parameter Store.
+- **The verification rules exist three times, on purpose.** The backend uses them to accept blocks, the browser so visitors don't have to trust the server, and `verify-state.js` as an independent check in CI. *Trade-off:* they're kept in sync by hand. CI catches drift between the backend and the verifier on every PR and deploy; the browser copy isn't covered by automated tests yet.
+- **Public-demo limits instead of accounts.** No sign-up. Instead: a difficulty cap, one miner at a time with a 60-second timeout, a mempool cap, per-IP rate limits, an admin-only reset, and a nightly re-mine of the demo chain.
+
+## 🚧 Known limitations and next steps
+
+- **No account state.** There are no balances and no miner reward, so a fresh wallet can "send" ETH it doesn't have. *Next:* account state with a genesis allocation or faucet, balance checks, and a reward for the miner.
+- **One node.** There's no peer-to-peer network, so no forks and no fork choice. *Next:* several nodes gossiping blocks, the most-work chain rule, and reorg handling.
+- **Fixed difficulty.** The visitor picks it. *Next:* retarget it from recent block times, as Bitcoin and pre-Merge Ethereum do.
+- **Mining shares the API's event loop.** It yields every 10 ms, but the hashing still competes with requests for CPU. *Next:* move it to a worker thread.
+- **A single replica.** Chain state lives in the backend process. Scaling out needs shared state and one elected miner.
+- **Legacy transactions only.** No EIP-1559 fees and no contract calls (no EVM).
+- **Frontend tests and observability.** There are no browser tests yet, no metrics or structured logs, and the health checks reuse `/mempool`.
+- **Toolchain.** Node 18 (end-of-life) and ethers v5. Node 22 and ethers v6 (or viem) are next.
+
 ## 🏗️ Architecture
+
+Local Docker Compose setup; production adds Caddy in front (see [Production Deployment (AWS)](#%EF%B8%8F-production-deployment-aws)).
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -45,17 +71,17 @@ This project models the core mechanics of **Ethereum's Proof-of-Work consensus**
 │  │  │  │                │  │      │  │                │  │    │ │
 │  │  │  │  Serves:       │  │      │  │  Express API   │  │    │ │
 │  │  │  │  - index.html  │  │      │  │  - /blockchain │  │    │ │
-│  │  │  │  - bundle.js   │  │      │  │  - /mine       │  │    │ │
+│  │  │  │  - bundle.*.js │  │      │  │  - /mine       │  │    │ │
 │  │  │  │  - CSS/assets  │  │      │  │  - /mempool    │  │    │ │
 │  │  │  │                │  │      │  │  - SSE updates │  │    │ │
 │  │  │  └────────────────┘  │      │  └────────────────┘  │    │ │
 │  │  │                      │      │                      │    │ │
 │  │  │  Port: 9000 ─────────┼──────┼─► Port: 9001         │    │ │
-│  │  │  (mapped to host)    │      │  (internal network)  │    │ │
+│  │  │  (mapped to host)    │      │  (also mapped)       │    │ │
 │  │  └──────────────────────┘      └──────────────────────┘    │ │
 │  │           │                              ▲                 │ │
-│  │           │    API Calls via             │                 │ │
-│  │           │    BACKEND_API_URL           │                 │ │
+│  │           │    nginx proxies /api/*      │                 │ │
+│  │           │    → http://backend:9001/*   │                 │ │
 │  │           └──────────────────────────────┘                 │ │
 │  │                                                            │ │
 │  │  ┌──────────────────────────────────────────────────────┐  │ │
@@ -115,23 +141,25 @@ blockchain101/
 │   ├── tsconfig.json
 │   └── webpack.config.js
 │
-├── k8s/                     # Kubernetes manifests
-│   ├── backend-deployment.yaml
-│   ├── backend-service.yaml
-│   ├── frontend-deployment.yaml
-│   └── frontend-service.yaml
+├── deploy/aws/              # Production (live demo)
+│   ├── terraform/          # EC2, IAM (GitHub OIDC), SSM parameters, budget; state in S3
+│   ├── docker-compose.yml  # Caddy + frontend + backend, public-demo limits
+│   ├── Caddyfile           # HTTPS (Let's Encrypt) in front of nginx
+│   └── deploy.sh           # Run on the host through SSM: .env from SSM, pull, restart
 │
-├── terraform/               # Infrastructure as Code (DigitalOcean)
-│   ├── provider.tf
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   └── terraform.tfvars.example
+├── .github/workflows/       # CI:Checks (ci.yml), CI:Build (build.yml), CI:Deploy (deploy.yml)
 │
 ├── scripts/                 # Devnet automation scripts
+│   ├── generate-transactions.js
+│   ├── mine-blocks.js
 │   ├── populate-devnet.js
 │   ├── verify-state.js
+│   ├── test/               # Blockchain state tests against a running node
+│   ├── config.json
 │   └── package.json
+│
+├── k8s/                     # Kubernetes manifests, deployed to a kind cluster in CI on every PR
+├── terraform/               # Legacy: DigitalOcean Kubernetes cluster (no longer running)
 │
 ├── run.sh                   # Interactive playground CLI
 └── docker-compose.yml       # Multi-container orchestration
@@ -157,12 +185,11 @@ blockchain101/
 2. **Set up Firebase** (optional; skip it to run with an in-memory chain that resets on restart, or force that with `STORE=memory`)
    - Create a Firebase project
    - Download service account credentials
-   - Create `backend/.env` file:
+   - Create `backend/.env` from the service account fields (all keys are listed in `backend/.env.example`). The minimum is:
      ```
-     BACKEND_API_URL=http://localhost:9001
      FIREBASE_PROJECT_ID=your-project-id
      FIREBASE_CLIENT_EMAIL=your-client-email
-     FIREBASE_PRIVATE_KEY="your-private-key"
+     FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
      ```
 
 3. **Install and run Backend**
@@ -192,6 +219,7 @@ blockchain101/
 
 1. **Build and run with Docker Compose**
    ```bash
+   touch backend/.env           # required by compose; leave it empty to run with the in-memory store
    docker compose up --build -d
    ```
 
@@ -219,11 +247,10 @@ Or use the interactive playground:
 │ 2. npm run build│ Webpack bundles React app
 ├─────────────────┤
 │ 3. dist/        │ Creates static files
-│    - index.html │ HTML entry point
-│    - bundle.js  │ Bundled JavaScript
-│    - assets/    │ Images, fonts, etc.
+│    - index.html │ HTML entry point (always revalidated)
+│    - bundle.<hash>.js  Bundled JavaScript, named by content hash (cached for a year)
 ├─────────────────┤
-│ 4. Copy to nginx│ Nginx serves static files
+│ 4. Copy to nginx│ public/ (favicon, sounds, preview image) + dist/
 └─────────────────┘
 ```
 
@@ -246,7 +273,7 @@ Or use the interactive playground:
 ## 🌐 Communication Flow
 
 1. User opens browser → `http://localhost:9000`
-2. Nginx (frontend container) serves `index.html` + `bundle.js`
+2. Nginx (frontend container) serves `index.html` + `bundle.<hash>.js`
 3. React app loads in browser
 4. User clicks "Add Transaction"; the browser signs a transfer with a fresh wallet
 5. React sends `POST /api/transaction` with `{ raw }` (relative URL)
@@ -267,7 +294,7 @@ Or use the interactive playground:
 
 ### Backend Image
 - **Base**: `node:18-alpine`
-- **Size**: ~150MB
+- **Size**: ~80MB (compressed)
 - **Purpose**: Run Express API server
 - **Exposed Port**: 9001
 
@@ -294,10 +321,10 @@ Or use the interactive playground:
 ### DevOps
 - **Containerization**: Docker
 - **Orchestration**: Docker Compose
-- **Web Server**: Nginx (for frontend)
-- **CI/CD**: GitHub Actions
-- **IaC**: Terraform (DigitalOcean)
-- **Kubernetes**: DOKS (DigitalOcean Kubernetes Service)
+- **Web Server**: Nginx (frontend + `/api` proxy), Caddy (HTTPS) in production
+- **CI/CD**: GitHub Actions (AWS access through OIDC, no stored AWS keys)
+- **IaC**: Terraform (AWS: EC2, IAM, SSM Parameter Store, budget alert; state in S3)
+- **Kubernetes**: manifests tested in CI on a throwaway kind cluster (the DigitalOcean cluster they used to run on is gone)
 
 ## 🎯 Features
 
@@ -373,7 +400,10 @@ Each submenu has numbered options — no need to remember commands.
 
 ## ⚙️ CI/CD Workflows
 
-Two GitHub Actions workflows automate the build and deployment pipeline. Both are triggered by **merging a PR with a specific label**.
+Three GitHub Actions workflows:
+
+- **CI:Checks** (`ci.yml`) runs on every PR and every push to `main`: backend build and unit tests, frontend type-check and build, `terraform fmt`/`validate`, the production compose file, `shellcheck` on the deploy script, `nginx -t` on the frontend config, and a Kubernetes run: the `k8s/` manifests are deployed to a throwaway kind cluster with images built from the PR, then a chain is mined through the frontend's nginx proxy and verified with `verify-state.js --strict`.
+- **CI:Build** and **CI:Deploy** run when a PR with their label is **merged**. CI:Deploy also runs nightly (03:00 UTC) and on demand.
 
 ### CI:Build — Build and Push Docker Images
 
@@ -400,25 +430,27 @@ Two GitHub Actions workflows automate the build and deployment pipeline. Both ar
 
 ### CI:Deploy — Build Pre-Mined Blockchain Image
 
-**Trigger**: Merge a PR with the `CI:Deploy` label
+**Trigger**: Merge a PR with the `CI:Deploy` label, nightly at 03:00 UTC, or manually (Actions → Run workflow)
 
 **What it does**:
-1. Starts the devnet using Docker Compose
-2. Clears any existing blockchain state
-3. Runs `scripts/populate-devnet.js` — submits 8 transactions and mines 3 blocks at difficulty 2
-4. Verifies blockchain state with `scripts/verify-state.js`
-5. Builds new Docker images tagged `pre-mined` and `pre-mined-<sha>`
-6. Starts the pre-mined images and runs the full test suite
-7. Pushes verified images to Docker Hub
+1. Starts the devnet with Docker Compose, using the production Firestore credentials
+2. Clears the stored chain (this is the shared chain the live demo serves)
+3. Runs `scripts/populate-devnet.js`: 3 blocks of 8 signed transactions each, at difficulty 2
+4. Verifies the chain with `scripts/verify-state.js --strict` (signatures, roots, hashes, proof of work, links); any error fails the job
+5. Builds and pushes images tagged `pre-mined`, `pre-mined-<sha>` and `latest`
+6. Restarts the stack and verifies the chain again
+7. Assumes an AWS role through OIDC, stores the Firebase service account in SSM Parameter Store, and runs `blockchain101-deploy` on the EC2 host through SSM Run Command (pulls `:latest` and restarts)
+8. Smoke-tests the public URL
 
 **Required GitHub Secrets** (in addition to Docker secrets above):
 | Secret | Description |
 |---|---|
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Full Firebase service account JSON (paste the entire downloaded JSON file) |
+| `AWS_DEPLOY_ROLE_ARN` | The `github_deploy_role_arn` Terraform output |
 
 **Resulting images on Docker Hub**:
-- `<username>/blockchain101-backend:pre-mined`
-- `<username>/blockchain101-frontend:pre-mined`
+- `<username>/blockchain101-backend:pre-mined` and `:latest` (the EC2 host pulls `:latest`)
+- `<username>/blockchain101-frontend:pre-mined` and `:latest`
 
 ---
 
@@ -450,14 +482,16 @@ Edit `scripts/config.json` to customize defaults:
 
 | Command | Description |
 |---|---|
-| `npm run populate` | Submit 10 transactions + mine 5 blocks |
-| `npm run populate:quick` | Quick populate with fewer blocks |
-| `npm run verify` | Verify blockchain state and integrity |
+| `npm run populate` | 3 blocks of 8 signed transactions each, at difficulty 2 |
+| `npm run verify` | Recompute and verify the whole chain; exits non-zero on any error |
 | `npm test` | Run full blockchain state test suite |
+
+The `config.json` defaults apply when you run the scripts directly (e.g. `node mine-blocks.js`).
 
 ### Full workflow example
 ```bash
-# 1. Start devnet (rebuild to pick up any image changes)
+# 1. Start devnet (rebuild to pick up any image changes; an empty backend/.env runs in memory)
+touch backend/.env
 docker compose up --build -d
 
 # 2. Wait for backend to be ready
@@ -475,7 +509,7 @@ npm test
 
 ### Individual scripts
 
-- `generate-transactions.js` — submits N transactions to the mempool
+- `generate-transactions.js` — submits N transfers, each signed by a fresh wallet
 - `mine-blocks.js` — mines N blocks
 - `populate-devnet.js` — full automation (transactions + mining)
 - `verify-state.js` — recomputes signatures, transactions roots, hashes, proof of work and links; exits non-zero on any error
@@ -484,7 +518,7 @@ npm test
 
 ## ☁️ Production Deployment (AWS)
 
-The live demo runs on a single **EC2 instance** provisioned with **Terraform** (`deploy/aws/terraform`), sized for a portfolio demo at roughly $13–14/month.
+The live demo runs on a single **EC2 instance** provisioned with **Terraform** (`deploy/aws/terraform`), sized for a portfolio demo at roughly $13–14/month, with a $20/month budget alert.
 
 ```
 visitor ──HTTPS──▶ Caddy (auto Let's Encrypt) ──▶ nginx frontend ──/api──▶ Node backend ──▶ Firestore
@@ -510,7 +544,9 @@ visitor ──HTTPS──▶ Caddy (auto Let's Encrypt) ──▶ nginx frontend
 
 ```bash
 cd deploy/aws/terraform
-terraform init && terraform apply          # prints public_ip and github_deploy_role_arn
+cp backend.hcl.example backend.hcl         # S3 bucket for the state (create it once, see the file)
+terraform init -backend-config=backend.hcl
+terraform apply                            # prints public_ip and github_deploy_role_arn
 # 1. DNS: A record  <your domain>  ->  public_ip
 # 2. GitHub secret AWS_DEPLOY_ROLE_ARN = github_deploy_role_arn
 # 3. Run the CI:Deploy workflow (or merge a PR labelled CI:Deploy)
@@ -519,9 +555,13 @@ aws ssm start-session --target <instance_id>   # shell access without SSH
 
 ---
 
-## ☸️ Kubernetes Deployment (DigitalOcean)
+## ☸️ Legacy: Kubernetes Deployment (DigitalOcean)
 
-An alternative target, kept for reference: the app also deploys to **DigitalOcean Kubernetes Service (DOKS)**. Default config: 1 node, `s-1vcpu-2gb` size (~$12/mo), region `fra1` (Frankfurt).
+> **Not deployed, but tested.** The demo moved to AWS and the DOKS cluster was deleted in September 2026. The `k8s/` manifests are still exercised on every PR: CI:Checks deploys them to a throwaway [kind](https://kind.sigs.k8s.io/) cluster, mines a chain through the frontend's nginx proxy and verifies it. The DigitalOcean Terraform in `terraform/` is kept for reference only.
+>
+> To try the manifests on any cluster: `kubectl apply -f k8s/00-namespace.yaml`, create the `firebase-credentials` secret (empty values run the chain in memory), then `kubectl apply -f k8s/`.
+
+The app used to deploy to **DigitalOcean Kubernetes Service (DOKS)**. Default config: 1 node, `s-1vcpu-2gb` size (~$12/mo), region `fra1` (Frankfurt).
 
 ### Infrastructure (via Terraform)
 
@@ -600,9 +640,10 @@ The state tests verify:
 - Chain integrity (each block links to previous)
 - Ethereum-format hash validation
 - Transaction structure
+- Mempool and difficulty endpoints
 - Proof-of-work nonces
 - Timestamp ordering
-- Difficulty range
+- Mining continuity (a new block links to the previous tip)
 
 ---
 
@@ -615,7 +656,11 @@ The state tests verify:
 ### Firebase
 1. Go to Firebase Console → Project Settings → Service accounts
 2. Click "Generate new private key" → download JSON
-3. Add each field from the JSON as a separate GitHub Secret (see table in CI:Deploy section above)
+3. Store the whole file as one GitHub Secret, `FIREBASE_SERVICE_ACCOUNT_JSON`:
+   `gh secret set FIREBASE_SERVICE_ACCOUNT_JSON < service-account.json`, then delete the file
+
+### AWS
+- `AWS_DEPLOY_ROLE_ARN`: the `github_deploy_role_arn` output of `deploy/aws/terraform`. CI uses it through OIDC; no AWS keys are stored anywhere.
 
 > **Never commit `.env` files or `terraform.tfvars` with real credentials.**
 > Use `.env.example` and `terraform.tfvars.example` as templates.
@@ -641,13 +686,15 @@ docker compose down  # Stop all containers
 ### Firebase connection issues
 
 **`Error: Failed to parse private key`**
-- Make sure `FIREBASE_PRIVATE_KEY` has actual newlines, not literal `\n`
-- In `.env`: wrap the key in double quotes
-- In GitHub Secrets: paste the raw key with real newlines
+- In `.env`, wrap `FIREBASE_PRIVATE_KEY` in double quotes; real newlines and literal `\n` both work (the backend converts `\n`)
+- In GitHub, the secret is the whole service account JSON (`FIREBASE_SERVICE_ACCOUNT_JSON`), not the bare key
 
 **`Error: Could not load the default credentials`**
-- Verify all `FIREBASE_*` environment variables are set
+- Verify the `FIREBASE_*` environment variables are set
 - Check the service account has Firestore read/write permissions
+
+**The backend says it is keeping the chain in memory**
+- `FIREBASE_PROJECT_ID` isn't set (or `STORE=memory`), so nothing is persisted. Expected for local development without Firebase
 
 ### CI/CD workflow not triggering
 
@@ -655,13 +702,10 @@ docker compose down  # Stop all containers
 - Confirm the correct label (`CI:Build` or `CI:Deploy`) was added **before** merging
 - Check Actions tab for any error logs
 
-### Terraform / DigitalOcean issues
+### Live demo issues
 
-- Ensure `doctl` is installed and authenticated: `doctl account get`
-- Verify your `do_token` in `terraform.tfvars` is a valid DigitalOcean personal access token
-- See `terraform/README.md` for detailed setup steps
-
----
+- Shell on the host without SSH: `aws ssm start-session --target <instance_id>`, then `cd /opt/blockchain101 && docker compose ps` / `docker compose logs backend`
+- A browser still showing an old version after a deploy: reload once (`index.html` is revalidated on every visit)
 
 ---
 
@@ -680,8 +724,8 @@ Stage 1 — builder (node:18-alpine)          Stage 2 — runtime (nginx:alpine)
 │  npm ci                         │          │                              │
 │  COPY src/                      │  COPY    │  /usr/share/nginx/html/      │
 │  npm run build  ──────────────► │ ──────►  │    index.html                │
-│                   /app/dist/    │          │    bundle.js                 │
-│                                 │          │    assets/                   │
+│                   /app/dist/    │          │    bundle.<hash>.js          │
+│                                 │          │    + public/ assets          │
 │  (node_modules discarded)       │          │                              │
 └─────────────────────────────────┘          │  nginx.conf (template)       │
                                              │  → envsubst at runtime       │
@@ -700,7 +744,7 @@ Stage 1 — builder (node:18-alpine)          Stage 2 — runtime (node:18-alpin
 │          /app/dist/             │          │                              │
 │                                 │          │  node dist/server.js         │
 └─────────────────────────────────┘          └──────────────────────────────┘
-Final image: ~150 MB
+Final image: ~80 MB compressed
 ```
 
 **nginx reverse proxy**
@@ -713,9 +757,9 @@ Browser                    Frontend Container (nginx)         Backend Container 
    │  GET /                       │                                    │
    │ ─────────────────────────►   │                                    │
    │  ◄─────────────────────────  │                                    │
-   │  index.html + bundle.js      │                                    │
+   │  index.html + bundle.*.js    │                                    │
    │                              │                                    │
-   │  POST /api/transaction       │                                    │
+   │  POST /api/transaction {raw} │                                    │
    │ ─────────────────────────►   │                                    │
    │                              │  rewrite /api/transaction          │
    │                              │       → /transaction               │
@@ -723,8 +767,8 @@ Browser                    Frontend Container (nginx)         Backend Container 
    │                              │  transaction                       │
    │                              │ ─────────────────────────────────► │
    │                              │  ◄───────────────────────────────  │
-   │  ◄─────────────────────────  │  200 OK { txHash: "0x..." }        │
-   │  200 OK { txHash: "0x..." }  │                                    │
+   │  ◄─────────────────────────  │  201 { hash, from, to, value, … }  │
+   │  201 { hash, from, to, … }   │                                    │
 ```
 
 The nginx config uses `envsubst` so the backend hostname is injected at container startup — no rebuild needed:
@@ -739,19 +783,19 @@ set $upstream http://${BACKEND_HOST}:9001    set $upstream http://backend:9001
 **docker-compose network**
 
 ```
-┌────────────────────────── blockchain-network (bridge) ───────────────────────────┐
+┌────────────────────────── blockchain-network (bridge) ────────────────────────────┐
 │                                                                                   │
 │   ┌─────────────────────────────┐         ┌────────────────────────────────┐      │
 │   │  blockchain101-frontend     │         │  blockchain101-backend         │      │
 │   │                             │         │                                │      │
-│   │  BACKEND_HOST=backend       │         │  PORT=9001                     │      │
+│   │  BACKEND_HOST=backend       │         │  listens on 9001               │      │
 │   │  BACKEND_RESOLVER=127.0.0.11│         │  Firebase credentials via .env │      │
 │   │                             │         │                                │      │
 │   │  :80 (internal)             │         │  :9001 (internal)              │      │
 │   └──────────────┬──────────────┘         └────────────────────────────────┘      │
-│                  │                                       ▲                         │
+│                  │                                       ▲                        │
 │          port mapping                         DNS name "backend"                  │
-│          9000:80                              resolves inside network              │
+│          9000:80                              resolves inside network             │
 └──────────────────┼────────────────────────────────────────────────────────────────┘
                    │
            HOST MACHINE
@@ -806,7 +850,7 @@ The workflow uses GitHub Actions layer cache (`type=gha`) — unchanged layers (
 
 ### CI:Deploy — How it works
 
-Produces a `:pre-mined` image — built and tested against a Firebase instance populated with 5 blocks and 10 transactions.
+Re-mines the shared demo chain, builds and pushes the images, and deploys them to EC2.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -815,24 +859,29 @@ Produces a `:pre-mined` image — built and tested against a Firebase instance p
 │  ① Checkout + Docker login                                                  │
 │  ② Write Firebase credentials → backend/.env  (from GitHub Secrets)         │
 │  ③ docker compose up -d  (start devnet)                                     │
-│  ④ Health check: poll GET /blockchain until 200                              │
+│  ④ Health check: poll GET /blockchain until 200                             │
 │  ⑤ DELETE /blockchain  →  restart backend  (fresh genesis block)            │
-│  ⑥ scripts/populate-devnet.js  →  10 transactions + mine 5 blocks           │
-│  ⑦ scripts/verify-state.js  (assert chain integrity)                        │
+│  ⑥ scripts/populate-devnet.js  →  3 blocks × 8 signed txs, difficulty 2     │
+│  ⑦ scripts/verify-state.js --strict  (recompute the whole chain)            │
 │  ⑧ docker compose down                                                      │
-│  ⑨ Build & push  :pre-mined  and  :pre-mined-<sha>  to Docker Hub           │
-│  ⑩ Start pre-mined images → run npm test → docker compose down              │
+│  ⑨ Build & push  :pre-mined, :pre-mined-<sha>, :latest  to Docker Hub       │
+│  ⑩ Restart the stack → verify again → docker compose down                   │
+│  ⑪ AWS role via OIDC → Firebase JSON into SSM Parameter Store               │
+│  ⑫ SSM Run Command on EC2: blockchain101-deploy (pull :latest, restart)     │
+│  ⑬ Smoke test https://blockchain101.founderexchange.co                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> The blockchain data lives in Firebase (external DB), not baked into the image. `:pre-mined` means "built and verified against a known-good populated blockchain state."
+> The blockchain data lives in Firestore, not in the image. Steps ⑤–⑦ rewrite the chain the live demo serves, which is how the nightly run resets it. `:pre-mined` means "built and verified against a freshly populated chain."
 
 ---
 
-### Terraform — Infrastructure as Code
+### Terraform — Infrastructure as Code (legacy DigitalOcean setup)
 
-One `terraform apply` creates everything needed to run in the cloud:
+> Production now uses `deploy/aws/terraform`, described in [Production Deployment (AWS)](#%EF%B8%8F-production-deployment-aws). This section and the Kubernetes one below describe the old DOKS setup, which is no longer running.
+
+One `terraform apply` in `terraform/` created the DigitalOcean cluster:
 
 ```
 terraform apply
@@ -861,7 +910,7 @@ Firebase secrets are passed as `TF_VAR_*` environment variables — never writte
 
 ---
 
-### Kubernetes — Runtime Orchestration
+### Kubernetes — Runtime Orchestration (legacy)
 
 **Cluster layout**
 
@@ -923,14 +972,13 @@ Secret "firebase-credentials"           Backend Pod
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
 │  SOURCE CODE  (GitHub)                                                           │
-│  branches / PRs / labels                                                         │
+│  every PR: CI:Checks (build, type-check, tests, Terraform, compose, nginx, k8s)  │
 └──────────────────────────────┬───────────────────────────────────────────────────┘
-                               │ merge with CI:Build label
+                               │ merge with CI:Deploy label (or nightly / manual)
                                ▼
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│  CI/CD  (GitHub Actions)                                                         │
-│  build.yml  → builds Docker images                                               │
-│  deploy.yml → builds pre-mined images                                            │
+│  CI:Deploy  (GitHub Actions)                                                     │
+│  re-mine + verify the chain in Firestore → build images → push                   │
 └──────────────────────────────┬───────────────────────────────────────────────────┘
                                │ docker push
                                ▼
@@ -939,41 +987,36 @@ Secret "firebase-credentials"           Backend Pod
 │  galinganchev/blockchain101-backend:latest                                       │
 │  galinganchev/blockchain101-frontend:latest                                      │
 └──────────────────────────────┬───────────────────────────────────────────────────┘
-                               │ kubectl rollout restart → docker pull
+                               │ OIDC → SSM Run Command → docker compose pull + up
                                ▼
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│  INFRASTRUCTURE  (DigitalOcean — provisioned once by Terraform)                  │
+│  AWS  eu-central-1  (provisioned by deploy/aws/terraform)                        │
 │                                                                                  │
+│  EC2 t3.micro + Elastic IP, ports 80/443 only, no SSH                            │
 │  ┌────────────────────────────────────────────────────────────────────────────┐  │
-│  │  DOKS Cluster  fra1                                                        │  │
-│  │  ┌──────────────────────────────────────────────────────────────────────┐  │  │
-│  │  │  Namespace: blockchain101                                            │  │  │
-│  │  │                                                                      │  │  │
-│  │  │  ┌─────────────────────────┐    ┌─────────────────────────────────┐  │  │  │
-│  │  │  │ frontend Deployment     │    │ backend Deployment              │  │  │  │
-│  │  │  │  Pod: nginx + React     │───►│  Pod: Node.js + Firebase        │  │  │  │
-│  │  │  └────────────┬────────────┘    └────────────────┬────────────────┘  │  │  │
-│  │  │  Service (LB) :80              Service (LB) :9001                     │  │  │
-│  │  └───────────────┼──────────────────────────────────┼───────────────────┘  │  │
-│  └──────────────────┼──────────────────────────────────┼──────────────────────┘  │
-└─────────────────────┼──────────────────────────────────┼──────────────────────────┘
-                      ▼                                  ▼
-              http://138.68.125.204              http://164.90.242.214:9001
+│  │  Docker Compose                                                            │  │
+│  │  Caddy (HTTPS) ──► nginx frontend ──/api──► Node backend ──► Firestore     │  │
+│  │  .env built from SSM Parameter Store at deploy time (root-only)            │  │
+│  └────────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────┬───────────────────────────────────────────────────┘
+                               ▼
+                https://blockchain101.founderexchange.co
 ```
 
 **Local vs cloud at a glance**
 
 ```
-                    LOCAL (docker compose)              CLOUD (k8s on DOKS)
-                    ──────────────────────              ───────────────────
-Image source        Built from source                  Pulled from Docker Hub
-BACKEND_HOST        backend  (Docker DNS)              blockchain101-backend
-                                                       .blockchain101.svc.cluster.local
-BACKEND_RESOLVER    127.0.0.11  (Docker DNS)           kube-dns.kube-system.svc.cluster.local
-Firebase creds      backend/.env file                  Kubernetes Secret
-Access              localhost:9000                     138.68.125.204:80
-Restart             docker compose restart             kubectl rollout restart
-Logs                docker compose logs -f             kubectl logs -f -l app=...
+                    LOCAL (docker compose)              CLOUD (EC2, deploy/aws)
+                    ──────────────────────              ───────────────────────
+Image source        Built from source                   Pulled from Docker Hub (:latest)
+HTTPS               none                                Caddy, Let's Encrypt
+BACKEND_HOST        backend  (Docker DNS)               backend  (Docker DNS)
+Firebase creds      backend/.env file (or none:         SSM Parameter Store → root-only .env
+                    in-memory chain)
+Public-demo limits  off                                 on (difficulty, mining time, mempool, rate limits)
+Access              localhost:9000                      https://blockchain101.founderexchange.co
+Restart             docker compose restart              CI:Deploy, or SSM session + docker compose
+Logs                docker compose logs -f              aws ssm start-session → docker compose logs
 ```
 
 ---
@@ -984,7 +1027,7 @@ Logs                docker compose logs -f             kubectl logs -f -l app=..
 
 - The nginx config is NOT hardcoded — it's a template with a `${BACKEND_HOST}` placeholder
 - When the container starts, nginx automatically runs `envsubst` which swaps the placeholder with the real value from the env var
-- Same Docker image works everywhere — docker-compose injects `backend`, K8s injects the full cluster DNS name
+- Same Docker image works everywhere: docker-compose injects `backend` (locally and on EC2); the legacy K8s setup injected the full cluster DNS name
 
 ```
 docker compose up
@@ -1008,7 +1051,7 @@ nginx proxies → http://backend:9001/transaction
 
 ---
 
-### run.sh — auto-fetches load balancer IPs from kubectl
+### run.sh — auto-fetches load balancer IPs from kubectl (legacy DOKS)
 
 - DigitalOcean assigns NEW IPs every time you `terraform destroy + apply` — hardcoding breaks immediately
 - On startup, `run.sh` asks kubectl "what IP did DigitalOcean assign to my services right now?"
@@ -1032,7 +1075,7 @@ App menu always has valid URLs — no manual editing after terraform destroy/app
 
 ---
 
-### Rolling update — zero-downtime image swap
+### Rolling update — zero-downtime image swap (legacy DOKS)
 
 - K8s doesn't pull new images automatically — you trigger it with `kubectl rollout restart`
 - The rolling update strategy (`maxUnavailable: 1, maxSurge: 0`) swaps pods one at a time
@@ -1072,26 +1115,23 @@ Every secret is injected at runtime. Nothing is baked into images or committed t
 │       ├──► backend/.env              LOCAL DEV                              │
 │       │    ├── .gitignore'd          never reaches GitHub                   │
 │       │    ├── docker compose reads  via env_file: ./backend/.env           │
-│       │    └── consumed by           process.env.FIREBASE_* in Node.js     │
+│       │    └── consumed by           process.env.FIREBASE_* in Node.js      │
 │       │                                                                     │
 │       ├──► GitHub Secrets            CI/CD                                  │
-│       │    ├── FIREBASE_SERVICE_ACCOUNT_JSON  (single JSON blob)           │
+│       │    ├── FIREBASE_SERVICE_ACCOUNT_JSON  (single JSON blob)            │
+│       │    ├── AWS_DEPLOY_ROLE_ARN   role assumed through OIDC (no AWS keys)│
 │       │    ├── DOCKER_USERNAME / DOCKER_PASSWORD                            │
-│       │    ├── encrypted at rest     GitHub manages encryption              │
-│       │    ├── masked in logs        GitHub redacts values in output        │
-│       │    └── deploy.yml reads via  ${{ secrets.* }} → writes backend/.env │
-│       │                              at runtime, never cached in image      │
+│       │    ├── masked in logs        GitHub masks the stored value; values  │
+│       │    │                         derived from it (the decoded key) are  │
+│       │    │                         masked explicitly with ::add-mask::    │
+│       │    └── deploy.yml writes     backend/.env at runtime, never into    │
+│       │                              an image                               │
 │       │                                                                     │
-│       ├──► Terraform TF_VAR_*        INFRASTRUCTURE PROVISIONING            │
-│       │    ├── shell env vars        never in terraform.tfvars              │
-│       │    ├── terraform.tfvars      .gitignore'd                           │
-│       │    └── creates k8s Secret    "firebase-credentials" in etcd         │
-│       │                                                                     │
-│       └──► Kubernetes Secret         PRODUCTION RUNTIME                     │
-│            ├── stored encrypted      in DOKS etcd                           │
-│            ├── injected as env vars  secretKeyRef in deployment YAML        │
-│            ├── never in pod spec     only references, not values            │
-│            └── consumed by           process.env.FIREBASE_* in Node.js     │
+│       └──► SSM Parameter Store       PRODUCTION RUNTIME (EC2)               │
+│            ├── SecureString          written by CI:Deploy                   │
+│            ├── /blockchain101/admin-token  generated by Terraform           │
+│            ├── read by the instance  role limited to this app's parameters  │
+│            └── deploy.sh writes      a root-only .env on the host           │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1099,18 +1139,19 @@ Every secret is injected at runtime. Nothing is baked into images or committed t
 | Secret | Where it lives | How it's injected | Protected by |
 |---|---|---|---|
 | Firebase credentials | `backend/.env` (local) | `env_file` in docker-compose | `.gitignore` |
-| Firebase credentials | K8s Secret `firebase-credentials` (prod) | `valueFrom: secretKeyRef` in pod spec | Terraform creates it, stored encrypted in etcd |
-| Firebase credentials | `FIREBASE_SERVICE_ACCOUNT_JSON` (CI) | GitHub Actions writes to `backend/.env` at runtime | GitHub Secrets (encrypted, masked in logs) |
-| DigitalOcean token | `terraform/terraform.tfvars` (local) | `do_token` variable | `.gitignore` |
-| Firebase via Terraform | `TF_VAR_firebase_*` env vars | Shell environment → Terraform variables | Never written to any file |
+| Firebase credentials | `FIREBASE_SERVICE_ACCOUNT_JSON` (CI) | GitHub Actions writes `backend/.env` at runtime | GitHub Secrets (encrypted; decoded key masked explicitly) |
+| Firebase credentials | SSM `/blockchain101/firebase-service-account` (prod) | `deploy.sh` builds a root-only `.env` on EC2 | SecureString, instance role scoped to `/blockchain101/*` |
+| Admin token | SSM `/blockchain101/admin-token` | same `.env`, checked on `DELETE /blockchain` | Generated by Terraform, never in git |
+| AWS access for CI | IAM role trusted for this repo (OIDC) | `aws-actions/configure-aws-credentials` | No long-lived keys anywhere |
 | Docker Hub credentials | GitHub Secrets | `docker/login-action` in CI | GitHub Secrets |
-| Backend hostname | `BACKEND_HOST` env var | docker-compose / K8s deployment | Not a secret — but injected, never hardcoded |
+| Terraform state | S3 bucket (versioned, private) | `backend.hcl` (gitignored) | Private, versioned bucket; nothing local |
+| Backend hostname | `BACKEND_HOST` env var | docker-compose | Not a secret — but injected, never hardcoded |
 
 ```
 .gitignore blocks:
-  backend/.env
-  terraform/terraform.tfvars
-  terraform/terraform.tfstate*
+  .env, backend/.env, frontend/.env
+  deploy/aws/terraform/terraform.tfvars, backend.hcl, *.tfstate*
+  terraform/terraform.tfvars, terraform/terraform.tfstate*   (legacy)
 
 Docker images contain:
   ✓ compiled code
@@ -1128,8 +1169,3 @@ This project is for educational purposes.
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-TODO-s:
-
-- add to deploy pipeline
-- add Temporal 

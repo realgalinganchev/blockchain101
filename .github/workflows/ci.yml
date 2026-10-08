@@ -73,3 +73,68 @@ jobs:
             -v "$PWD/frontend/nginx.conf:/etc/nginx/templates/default.conf.template:ro" \
             -e BACKEND_HOST=backend -e BACKEND_RESOLVER=127.0.0.11 \
             nginx:alpine nginx -t
+
+  kubernetes:
+    # The k8s/ manifests aren't deployed anywhere since the demo moved to AWS. This keeps
+    # them working: deploy them to a throwaway kind cluster with images built from this
+    # commit, then mine and verify a chain through the frontend's nginx proxy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the images from this commit
+        run: |
+          docker build -t blockchain101-backend:ci backend
+          docker build -t blockchain101-frontend:ci frontend
+
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: blockchain101
+
+      - name: Load the images into the cluster
+        run: kind load docker-image blockchain101-backend:ci blockchain101-frontend:ci --name blockchain101
+
+      - name: Deploy the manifests
+        run: |
+          kubectl apply -f k8s/00-namespace.yaml
+          # No Firebase in CI: empty credentials make the backend keep the chain in memory
+          keys="TYPE PROJECT_ID PRIVATE_KEY_ID PRIVATE_KEY CLIENT_EMAIL CLIENT_ID AUTH_URI TOKEN_URI AUTH_PROVIDER_CERT_URL CLIENT_CERT_URL UNIVERSE_DOMAIN"
+          args=()
+          for key in $keys; do args+=("--from-literal=FIREBASE_${key}="); done
+          kubectl -n blockchain101 create secret generic firebase-credentials "${args[@]}"
+          # The manifests as written, with the images built above instead of :latest from Docker Hub
+          for file in k8s/*.yaml; do
+            echo "---"
+            sed -E 's#galinganchev/(blockchain101-(backend|frontend)):latest#\1:ci#' "$file"
+          done | kubectl apply -f -
+          kubectl -n blockchain101 rollout status deployment/blockchain101-backend --timeout=180s
+          kubectl -n blockchain101 rollout status deployment/blockchain101-frontend --timeout=180s
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Mine and verify a chain through the frontend's nginx proxy
+        run: |
+          kubectl -n blockchain101 port-forward svc/blockchain101-frontend 8080:80 > /tmp/port-forward.log 2>&1 &
+          api=http://localhost:8080/api
+          timeout 30 bash -c "until curl -sf $api/blockchain > /dev/null; do sleep 1; done"
+          curl -sf http://localhost:8080/ | grep -q 'bundle\.'
+          sse=$(curl -sN --max-time 3 "$api/mining-progress" || true)
+          grep -q connected <<< "$sse"
+          cd scripts && npm ci
+          node populate-devnet.js -t 4 -b 2 -d 2 -u "$api"
+          node verify-state.js --strict --min-blocks 3 -u "$api"
+          txs=$(curl -sf "$api/blockchain" | jq '[.[].transactions | length] | add')
+          echo "Transactions in blocks: $txs"
+          test "$txs" -eq 8
+
+      - name: Show cluster state on failure
+        if: failure()
+        run: |
+          kubectl -n blockchain101 get pods,svc -o wide
+          kubectl -n blockchain101 describe pods
+          kubectl -n blockchain101 logs deployment/blockchain101-backend --tail=80
+          kubectl -n blockchain101 logs deployment/blockchain101-frontend --tail=80

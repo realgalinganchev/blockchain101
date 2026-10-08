@@ -62,6 +62,7 @@ async function generateTransactions() {
   console.log(chalk.green(`  ✓ Successful: ${successful}`));
   if (failed > 0) {
     console.log(chalk.red(`  ✗ Failed: ${failed}`));
+    process.exitCode = 1; // so populate-devnet (and CI) stop instead of building on a partial chain
   }
 
   // Check mempool

@@ -1,4 +1,4 @@
-import { Store } from "./store";
+import { Store, orderByLinks } from "./store";
 import { EthereumTransaction, StoredBlock } from "../../types/block";
 
 /** In-process store for local development and tests: no Firebase needed, gone on restart. */
@@ -9,7 +9,7 @@ export function createMemoryStore(): Store {
 
   return {
     async getBlocks() {
-      return [...blocks.values()].map(copy).sort((a, b) => a.number - b.number);
+      return orderByLinks([...blocks.values()].map(copy));
     },
     async saveBlock(block) {
       blocks.set(block.hash, copy(block));

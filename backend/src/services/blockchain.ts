@@ -44,7 +44,9 @@ export async function initializeBlockchain() {
     blockchain.chain.push(constructBlock(data));
     indexMinedTransactions(data.transactionsDetailed ?? []);
   });
+  // Report, don't crash: e.g. a chain stored by an older version still loads, so it can be reset
   const problems = validateChain(blockchain.chain);
+  if (problems.length) console.warn("DELETE /blockchain starts a fresh chain.");
   if (problems.length) console.warn(`The stored chain has ${problems.length} problem(s):\n  ${problems.join("\n  ")}`);
 }
 
@@ -54,7 +56,7 @@ export async function initializeMempool() {
   for (const tx of await store.getMempool()) {
     if (!checkTransaction(tx) && !minedTxHashes.has(tx.hash)) {
       mempool.push(tx);
-    } else {
+    } else if (tx?.id) {
       await store.removeFromMempool(tx.id);
     }
   }
@@ -91,7 +93,9 @@ export async function mineBlock(): Promise<StoredBlock & { miningTime: number }>
   try {
     // Copy, don't remove: if mining is aborted the transactions stay pending.
     const selected = mempool.slice(0, MAX_TRANSACTIONS);
-    const block = createNewBlock(selected, blockchain.getLatestBlock(), currentDifficulty);
+    const parent = blockchain.getLatestBlock();
+    if (!Number.isInteger(parent.number)) throw new Error("The stored chain is from an older version: reset it before mining.");
+    const block = createNewBlock(selected, parent, currentDifficulty);
 
     // On the public demo, give up after MAX_MINING_MS so one request can't hog the CPU.
     const deadline = MAX_MINING_MS > 0 ? startTime + MAX_MINING_MS : Infinity;

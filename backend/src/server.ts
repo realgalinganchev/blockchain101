@@ -24,8 +24,10 @@ app.use(limits.global);
 
 app.use("/", routes);
 
-initializeBlockchain().then(() => {
-  initializeMempool().then(() => {
-    app.listen(9001, () => console.log("Listening on port 9001"));
+initializeBlockchain()
+  .then(initializeMempool)
+  .then(() => app.listen(9001, () => console.log("Listening on port 9001")))
+  .catch((error) => {
+    console.error("Could not load the chain from the store:", error);
+    process.exit(1);
   });
-});

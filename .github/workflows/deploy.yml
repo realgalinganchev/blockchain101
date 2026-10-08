@@ -43,6 +43,9 @@ jobs:
         run: |
           node -e "
             const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+            // GitHub only masks the secret as stored (JSON lines); mask each line of the
+            // decoded key too, so no later log output can show it.
+            sa.private_key.split('\n').filter(Boolean).forEach(function (line) { console.log('::add-mask::' + line); });
             const key = sa.private_key.split('\n').join('\\n');
             const lines = [
               'BACKEND_API_URL=http://localhost:9001',
@@ -82,8 +85,9 @@ jobs:
           docker compose ps
           echo "=== Backend logs ==="
           docker compose logs backend --tail=60
-          echo "=== .env keys (no values) ==="
-          cut -d= -f1 backend/.env
+          echo "=== .env variable names (no values) ==="
+          # Names only: the private key spans several lines, and printing whole lines leaked it
+          grep -oE '^[A-Z_][A-Z0-9_]*=' backend/.env | tr -d '='
 
       - name: Install script dependencies
         run: cd scripts && npm install

@@ -17,8 +17,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: 18
           cache: npm
@@ -33,8 +33,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: 18
           cache: npm
@@ -49,8 +49,8 @@ jobs:
       run:
         working-directory: deploy/aws/terraform
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
       - run: terraform fmt -check
       - run: terraform init -backend=false -input=false
       - run: terraform validate
@@ -58,7 +58,7 @@ jobs:
   compose:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate the production compose file
         working-directory: deploy/aws
         run: |
@@ -85,7 +85,7 @@ jobs:
     # commit, then mine and verify a chain through the frontend's nginx proxy.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the images from this commit
         run: |
@@ -115,7 +115,7 @@ jobs:
           kubectl -n blockchain101 rollout status deployment/blockchain101-backend --timeout=180s
           kubectl -n blockchain101 rollout status deployment/blockchain101-frontend --timeout=180s
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22 # the browser smoke test uses Node 22's built-in WebSocket
           cache: npm

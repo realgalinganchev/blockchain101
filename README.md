@@ -11,7 +11,7 @@
 
 **▶ Live demo: [blockchain101.founderexchange.co](https://blockchain101.founderexchange.co)** — add transactions, mine blocks and watch the nonce search stream in live. Runs on AWS, deployed by GitHub Actions; the demo chain resets every night. See [Production Deployment (AWS)](#%EF%B8%8F-production-deployment-aws).
 
-[![blockchain101 mining a block live: nonce counter, hash leading zeros against the target, mempool and linked chain](frontend/public/og.png)](https://blockchain101.founderexchange.co)
+[![blockchain101: signing two transactions, mining them into a block live, then tampering with the block and watching the browser's checks fail](docs/demo.gif)](https://blockchain101.founderexchange.co)
 
 An educational blockchain application demonstrating proof-of-work mining, transactions, and real-time updates using Server-Sent Events (SSE).
 
@@ -21,13 +21,36 @@ This project models the core mechanics of **Ethereum's Proof-of-Work consensus**
 
 **Transactions.** "Add transaction" creates two throwaway wallets in the browser and signs a legacy transfer from one to the other (chain id `1337`, sender nonce `0`). Only the raw signed bytes are sent. The node decodes them and **recovers the sender from the signature**, so nobody can submit a transaction for an address whose key they don't hold. It rejects unsigned or malformed transactions, other chain ids (EIP-155 replay protection), typed (EIP-1559) transactions, contract creation, gas below 21,000, duplicates, and nonces that aren't the sender's next one, which also stops a signed transaction from being replayed. The transaction hash is `keccak256(raw)`, as on Ethereum.
 
-**Blocks.** A block header holds `number`, `timestamp`, `previousHash`, `transactionsRoot` (a Merkle root of the transaction hashes), `difficulty` and `data`. Mining works like Ethash's seal: the header is hashed once (the *seal hash*), then the node tries nonces until `keccak256(sealHash ‖ nonce)` starts with `difficulty` zeros. Because the transactions root is in the header, changing, adding, removing or reordering any transaction changes the block hash, and with it the proof of work and the next block's `previousHash` link.
+**Blocks.** A block header holds `number`, `timestamp`, `previousHash`, `transactionsRoot` (a Merkle root of the transaction hashes), `difficulty` and `data`. Mining works like Ethash's seal: the header is hashed once (the *seal hash*), then the node tries nonces until `keccak256(sealHash ‖ nonce)` starts with `difficulty` zeros. Because the transactions root is in the header, changing, adding, removing or reordering any transaction changes the block hash, and with it the proof of work and the next block's `previousHash` link. Hashing only the seal hash and nonce per attempt gives about 300k hashes/s on one laptop core, 17× more than ABI-encoding the whole header for every attempt.
 
 **Validation.** Before a block is saved or appended, the node checks every signature against the stored fields, the transactions root, the hash, the proof of work, the parent link and the block number. The stored chain is re-checked on startup. Aborting or timing out a mining run leaves its transactions in the mempool.
 
 **Don't trust, verify.** The browser re-implements these rules and checks every block itself: the chain header shows the result, and each block's details list the checks. "Tamper with this block" edits a local copy so you can watch them fail. `scripts/verify-state.js` does the same independently in CI, and a deploy fails if the chain doesn't verify.
 
 **Live for everyone.** One Server-Sent Events stream (`/mining-progress`) carries mining progress plus `mining`, `block`, `mempool`, `difficulty` and `reset` events, so every open tab sees what other visitors do as it happens.
+
+## ⚖️ Design decisions and trade-offs
+
+- **Ethereum's real primitives, not toy ones.** Keccak-256, RLP and EIP-155 signatures through ethers, so a transaction hash or a recovered sender here is computed exactly as on Ethereum. *Trade-off:* proof of work is a leading-zeros target instead of Ethash's DAG, and there is no EVM.
+- **A Merkle root over a list, not a Patricia trie.** A binary Merkle tree is enough to commit a block to its transactions, and would support inclusion proofs (not exposed yet). Ethereum's trie also indexes account state, which this chain doesn't have.
+- **Seal hash + nonce.** The header is hashed once per block, and each attempt only hashes it together with the nonce. That's 17× more attempts per second than re-encoding the header each time.
+- **The chain lives in memory, Firestore keeps the durable copy.** Reads come from memory: ordered, fast, and no database read per request, so the free tier stays free. Firestore persists blocks and the mempool across restarts, behind a small `Store` interface that swaps in an in-memory store for local development and tests. *Trade-off:* state lives in one process, so the backend runs as a single replica.
+- **Server-Sent Events, not WebSockets.** Updates only flow from server to browser; writes are ordinary POSTs. SSE is plain HTTP, reconnects by itself and passes through nginx and Caddy unchanged. *Gotcha:* compressing proxies buffer the stream, hence `Cache-Control: no-transform`.
+- **One EC2 host with Docker Compose, not Kubernetes.** One small host runs a demo of this size for about $14/month including HTTPS (Caddy, Let's Encrypt). A managed cluster costs more (a node plus a load balancer per service) and adds nothing at one replica. The Kubernetes manifests stay tested in CI on kind.
+- **No long-lived credentials.** GitHub deploys through OIDC, the host is reached through SSM (no SSH, port 22 closed), and secrets live in SSM Parameter Store.
+- **The verification rules exist three times, on purpose.** The backend uses them to accept blocks, the browser so visitors don't have to trust the server, and `verify-state.js` as an independent check in CI. *Trade-off:* they're kept in sync by hand. CI catches drift between the backend and the verifier on every PR and deploy; the browser copy isn't covered by automated tests yet.
+- **Public-demo limits instead of accounts.** No sign-up. Instead: a difficulty cap, one miner at a time with a 60-second timeout, a mempool cap, per-IP rate limits, an admin-only reset, and a nightly re-mine of the demo chain.
+
+## 🚧 Known limitations and next steps
+
+- **No account state.** There are no balances and no miner reward, so a fresh wallet can "send" ETH it doesn't have. *Next:* account state with a genesis allocation or faucet, balance checks, and a reward for the miner.
+- **One node.** There's no peer-to-peer network, so no forks and no fork choice. *Next:* several nodes gossiping blocks, the most-work chain rule, and reorg handling.
+- **Fixed difficulty.** The visitor picks it. *Next:* retarget it from recent block times, as Bitcoin and pre-Merge Ethereum do.
+- **Mining shares the API's event loop.** It yields every 10 ms, but the hashing still competes with requests for CPU. *Next:* move it to a worker thread.
+- **A single replica.** Chain state lives in the backend process. Scaling out needs shared state and one elected miner.
+- **Legacy transactions only.** No EIP-1559 fees and no contract calls (no EVM).
+- **Frontend tests and observability.** There are no browser tests yet, no metrics or structured logs, and the health checks reuse `/mempool`.
+- **Toolchain.** Node 18 (end-of-life) and ethers v5. Node 22 and ethers v6 (or viem) are next.
 
 ## 🏗️ Architecture
 

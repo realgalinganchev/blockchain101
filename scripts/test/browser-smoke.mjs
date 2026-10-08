@@ -6,45 +6,84 @@
 //
 // Usage: node test/browser-smoke.mjs [url]     (Node 22+; CHROME_PATH defaults to google-chrome)
 import { spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const url = process.argv[2] ?? "http://localhost:9000";
 const chromePath = process.env.CHROME_PATH ?? "google-chrome";
-const port = 9333;
+const STARTUP_TIMEOUT_MS = 45000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const chrome = spawn(
-  chromePath,
-  ["--headless=new", "--no-sandbox", "--disable-gpu", `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), "smoke-"))}`, "about:blank"],
-  { stdio: "ignore" }
-);
 
 const problems = [];
 const pending = new Map();
 let nextId = 0;
 let socket;
+let chrome;
+let chromeOutput = "";
+let chromeExited = false;
 
-async function connect() {
-  for (let i = 0; i < 80; i++) {
+// Chrome picks a free port itself (--remote-debugging-port=0) and writes it to
+// DevToolsActivePort in the profile once DevTools is listening: no port clashes, and
+// no guessing when it's ready.
+function launchChrome() {
+  const profile = mkdtempSync(join(tmpdir(), "smoke-"));
+  chromeOutput = "";
+  chromeExited = false;
+  chrome = spawn(chromePath, ["--headless=new", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  chrome.stderr.on("data", (chunk) => {
+    chromeOutput = (chromeOutput + chunk).slice(-2000);
+  });
+  chrome.on("error", (error) => {
+    chromeOutput += ` spawn failed: ${error.message}`;
+    chromeExited = true;
+  });
+  chrome.on("exit", (code) => {
+    chromeOutput += ` (exited with code ${code})`;
+    chromeExited = true;
+  });
+  return profile;
+}
+
+async function devtoolsPort(profile) {
+  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+  while (Date.now() < deadline && !chromeExited) {
     try {
-      const page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === "page");
-      if (page) {
-        socket = new WebSocket(page.webSocketDebuggerUrl);
-        await new Promise((resolve, reject) => {
-          socket.onopen = resolve;
-          socket.onerror = reject;
-        });
-        socket.onmessage = (event) => onMessage(JSON.parse(event.data));
-        return;
-      }
+      const port = Number(readFileSync(join(profile, "DevToolsActivePort"), "utf8").split("\n")[0]);
+      if (port) return port;
     } catch {
-      // Chrome is still starting
+      // not written yet
     }
     await sleep(250);
   }
-  throw new Error(`Chrome didn't start (CHROME_PATH=${chromePath})`);
+  return null;
+}
+
+async function connect() {
+  // A cold start on a busy CI runner occasionally stalls, so allow one fresh retry
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const port = await devtoolsPort(launchChrome());
+    if (port) {
+      for (let i = 0; i < 40; i++) {
+        const page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === "page");
+        if (page) {
+          socket = new WebSocket(page.webSocketDebuggerUrl);
+          await new Promise((resolve, reject) => {
+            socket.onopen = resolve;
+            socket.onerror = reject;
+          });
+          socket.onmessage = (event) => onMessage(JSON.parse(event.data));
+          return;
+        }
+        await sleep(250);
+      }
+    }
+    console.error(`Chrome didn't start (attempt ${attempt}, CHROME_PATH=${chromePath}): ${oneLine(chromeOutput.slice(-600)) || "no output"}`);
+    chrome.kill("SIGKILL");
+  }
+  throw new Error("Chrome didn't start after 2 attempts");
 }
 
 function onMessage(msg) {
@@ -175,5 +214,5 @@ try {
 problems.forEach((problem) => console.error(`✗ ${oneLine(problem)}`));
 console.log(failed || problems.length ? "Browser smoke test failed" : "Browser smoke test passed: no CSP violations, exceptions or console errors");
 socket?.close();
-chrome.kill();
+chrome?.kill();
 process.exit(failed || problems.length ? 1 : 0);

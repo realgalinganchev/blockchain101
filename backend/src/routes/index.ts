@@ -60,7 +60,7 @@ router.get("/mine", limits.mine, async (_req: Request, res: Response) => {
       res.status(503).json({ error: "Mining took too long and was stopped. Try a lower difficulty." });
     } else {
       // The error text can carry block data from a request: strip line breaks so it can't fake log lines.
-      console.error("Error mining block:", String(error?.message ?? error).replace(/[\r\n]+/g, " "));
+      console.error("Error mining block:", String(error?.message ?? error).replace(/\r/g, "").replace(/\n/g, ""));
       res.status(500).json({ error: "Mining failed." });
     }
   }
